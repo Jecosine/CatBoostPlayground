@@ -1,97 +1,54 @@
-import hashlib
-import os
-from typing import NoReturn
+import json
+import os.path
+import pickle
+from allib.constants import *
+from allib.utils import ensure_path, validate_dataset
+from .tools import _download_dataset, _test_download
 
-# from tqdm import tqdm
-import requests
-import numpy as np
-import pandas as pd
-import pathlib
-import shutil
-import tempfile
-from rich.progress import (
-    BarColumn,
-    DownloadColumn,
-    Progress,
-    TaskID,
-    TextColumn,
-    TimeRemainingColumn,
-    TransferSpeedColumn,
-)
-import tarfile
-
-from allib.exceptions import ChecksumNotMatchError
-
-__BUF_SIZE = 1024 * 1024 * 10  # 10 MB buffer for file reading
-__CHUNK_SIZE = 1024 * 8  # 8 MB chunk for download stream
-
-progress = Progress(
-    TextColumn("[bold blue]{task.fields[filename]}", justify="right"),
-    BarColumn(),
-    "[progress.percentage]{task.percentage:>3.1f}%",
-    "•",
-    DownloadColumn(),
-    "•",
-    TransferSpeedColumn(),
-    "•",
-    TimeRemainingColumn(),
-)
+URL_TEMPLATE = "https://archive.ics.uci.edu/static/public/%s/%s.zip"
+UCI_DB = None
+print(os.getcwd(), os.path.abspath(os.path.curdir))
 
 
-def get_cache_path():
-    return os.path.join(os.getcwd(), "dataset_cache")
+def _load_raw_uci(raw_path: str = "./uci_db.json"):
+    global UCI_DB
+    db_cache_path = os.path.join(CACHE_DIR, "meta")
+    ensure_path(db_cache_path)
+    meta_path = os.path.join(db_cache_path, "uci_cache.pkl")
+    # process meta data
+    if UCI_DB is None:
+        if not ensure_path(meta_path, is_dir=False):
+            with open(raw_path, "rb") as f:
+                raw_data = json.load(f)
+            processed = {}
+            for i in raw_data:
+                processed[i["Name"].strip().lower().replace(" ", "-")] = i
+            with open(meta_path, "wb") as f:
+                pickle.dump(processed, f)
+            UCI_DB = processed
+        else:
+            with open(meta_path, "rb") as f:
+                UCI_DB = pickle.load(f)
 
 
-def _test_checksum(path: str, checksum: str) -> bool:
-    md5 = hashlib.md5()
-    with open(path, "rb") as f:
-        buffer = f.read(__BUF_SIZE)
-        while buffer:
-            md5.update(buffer)
-    if checksum != md5.hexdigest():
-        raise ChecksumNotMatchError()
+def load_uci(
+        name: str, reload: bool = False, test: bool = False, raw_path: str = "./uci_db.json"
+):
+    _load_raw_uci(raw_path)
+    name = name.lower()
+    if name not in UCI_DB:
+        # todo: new exception
+        raise RuntimeError(f"Cannot find {name} in UCI Repo")
+    dataset = UCI_DB[name]
+    dataset_path = os.path.join(CACHE_DIR, name)
+    if reload or validate_dataset(dataset_path):
+        url = URL_TEMPLATE % (dataset["ID"], dataset["slug"])
+        if not test:
+            _download_dataset(url, "", name)
+        else:
+            _test_download(url, name)
 
 
-def _download_file(url: str, path: str, desc: str | None = None):
-    """Download file with progress visualization
-
-    Args:
-        url: file url
-        fd: file descriptor of the local destination file
-        desc: file description
-    """
-    with open(path, "wb") as f:
-        with requests.get(url, stream=True) as req:
-            req.raise_for_status()
-            total = int(req.headers.get("content-length", 0))
-            print(total)
-            with progress:
-                tid = progress.add_task("Download", filename=desc)
-                progress.update(tid, total=total)
-                for chunk in req.iter_content(chunk_size=__CHUNK_SIZE):
-                    f.write(chunk)
-                    progress.update(tid, advance=len(chunk))
-
-
-def _extract_file(src_path: str, dst_path: str = "."):
-    with tarfile.open(src_path, "r:*") as f:
-        os.chdir(dst_path)
-        f.extractall()
-
-
-def _download_dataset(url: str, checksum: str, name: str):
-    cache_path = os.path.join(get_cache_path(), name)
-    # make dir
-    os.makedirs(cache_path)
-
-    fd, download_path = tempfile.mkstemp()
-    os.close(fd)
-    _download_file(url, fd, name)
-    # _test_checksum(download_path, checksum)
-    _extract_file(download_path, cache_path)
-
-
-def iris():
-    url = "https://archive.ics.uci.edu/static/public/53/iris.zip"
-    name = "iris"
-    _download_file(url, "", name)
+def _get_uci_db():
+    global UCI_DB
+    return UCI_DB
