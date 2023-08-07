@@ -1,1 +1,2 @@
-from .Dataset import Dataset, AVAILABLE_DATASET
+from .Dataset import Dataset, AVAIL_DATASET
+from .avail_datasets import iris
