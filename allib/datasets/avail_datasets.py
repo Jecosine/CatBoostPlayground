@@ -1,6 +1,9 @@
 import json
 import os.path
 import pickle
+
+import pandas as pd
+
 from allib.constants import *
 from allib.utils import ensure_path, validate_dataset
 from .tools import _download_dataset, _test_download
@@ -34,6 +37,17 @@ def _load_raw_uci(raw_path: str = "./uci_db.json"):
 def load_uci(
         name: str, reload: bool = False, test: bool = False, raw_path: str = "./uci_db.json"
 ):
+    """ Load datasets from UCI repo by name
+
+    Args:
+        name: dataset name(lower case and replace space with '-')
+        reload: reload if already exists
+        test: do not perform real download operation
+        raw_path: path to the crawled datasets info
+
+    Returns:
+        pd.DataFrame: the dataset in pandas.DataFrame form
+    """
     _load_raw_uci(raw_path)
     name = name.lower()
     if name not in UCI_DB:
@@ -49,6 +63,11 @@ def load_uci(
             _test_download(url, name)
 
 
-def _get_uci_db():
+def get_uci_db():
     global UCI_DB
     return UCI_DB
+
+
+def iris(path: str):
+    checklists = [os.path.join(path, i) for i in ["iris.data", "bezdekIris.data"]]
+    data1 = pd.read_csv(checklists[0])
