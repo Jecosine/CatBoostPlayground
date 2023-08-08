@@ -75,6 +75,7 @@ def _download_file(url: str, path: str, desc: str | None = None):
 
 
 def _extract_file(src_path: str, dst_path: str = ".", ext: str = "zip"):
+    cur_path = os.getcwd()
     print(f"Extracting {src_path} to {dst_path}...")
     extractor = (
         (lambda path: zipfile.ZipFile(path, "r"))
@@ -83,7 +84,10 @@ def _extract_file(src_path: str, dst_path: str = ".", ext: str = "zip"):
     )
     with extractor(src_path) as f:
         os.chdir(dst_path)
-        f.extractall()
+        try:
+            f.extractall()
+        finally:
+            os.chdir(cur_path)
 
 
 def _download_dataset(url: str, checksum: str, name: str):
