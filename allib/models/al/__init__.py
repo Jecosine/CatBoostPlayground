@@ -4,3 +4,4 @@ from .al_metrics import (
     UncertainMetric,
     get_al_metric,
 )
+from .pipeline import ActiveLearningPipeline

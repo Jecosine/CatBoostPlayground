@@ -4,40 +4,50 @@ import numpy as np
 import pandas as pd
 from allib.typing import ArrayLike
 from ..core import BaseModel
+from allib.datasets import Dataset
+from abc import ABC, abstractmethod
 
 
-class ActiveLearningMetric:
+class ActiveLearningMetric(ABC):
     """ instance selection metrics for active learning """
 
     def __init__(
-            self,
-            model: BaseModel,
-            batch_size: Optional[int],
-            init_size: Optional[float | int],
+        self,
+        # model: BaseModel,
+        batch_size: Optional[int] = 10,
+        init_size: Optional[float | int] = 0.1,
+        random_state: Optional[int] = 0,
     ):
         """ init the metric and return callable function
 
         Args:
             init_size:  percentage | n samples. Default equal to batch size if it is not specified
-            model: the model you want to evaluate
             batch_size: optional parameter. use batching if set otherwise sequential
+            random_state: random state
         """
         self.batch = batch_size is not None
         self.batch_size = batch_size
-        self.model = model
+        # self.model = model
         # assert hasattr(self.model, "fit")
         # if percentage, calculate the actual number of instances
         self.init_size = init_size or batch_size
+        self.random_state = random_state
 
-    def sample_initial(self, train_x: ArrayLike, train_y: ArrayLike, random_state: int):
-        pass
+    @abstractmethod
+    def sample_initial(
+        self, train_x: ArrayLike, train_y: ArrayLike, random_state: Optional[int] = None
+    ):
+        raise NotImplementedError
 
+    @abstractmethod
     def sample(
-            self,
-            train_x: ArrayLike,
-            train_y: ArrayLike,
-            random_state: int,
-            initial_batch: bool = False,
+        self,
+        train_x: ArrayLike,
+        train_y: ArrayLike,
+        random_state: Optional[int] = None,
+        initial_batch: bool = False,
+        *args,
+        **kwargs,
     ) -> (ArrayLike, ArrayLike, ArrayLike, ArrayLike):
         """ sample by random sampling
 
@@ -54,28 +64,16 @@ class ActiveLearningMetric:
             ArrayLike: newly sampled batch y
 
         """
-        N = self.batch_size
-        if initial_batch:
-            # if percentage, calculate the actual number of instances
-            if self.init_size < 1:
-                N = len(train_x) * self.init_size
-            N = min(len(train_x), N)  # prevent overflow the length
-        batch_x = train_x.sample(n=N, random_state=random_state)
-        batch_y = train_y.loc[batch_x.index]
-        return (
-            train_x.drop(batch_x.index),
-            train_y.drop(batch_y.index),
-            batch_x,
-            batch_y,
-        )
+        raise NotImplementedError
 
     def __call__(
-            self,
-            train_x: ArrayLike,
-            train_y: ArrayLike,
-            random_state: int,
-            initial_batch: bool = False,
-            **kwargs,
+        self,
+        train_x: ArrayLike,
+        train_y: ArrayLike,
+        random_state: Optional[int] = None,
+        initial_batch: bool = False,
+        *args,
+        **kwargs,
     ) -> (ArrayLike, ArrayLike, ArrayLike, ArrayLike):
         """ Return a sample function that returns
 
@@ -98,15 +96,25 @@ class ActiveLearningMetric:
 class RandomMetric(ActiveLearningMetric):
     """ New instances added by random batch selection """
 
-    pass
+    def sample_initial(
+        self, train_x: ArrayLike, train_y: ArrayLike, random_state: Optional[int] = None
+    ):
+        pass
 
-
-class UncertainMetric(ActiveLearningMetric):
-    def sample_initial(self, train_x: ArrayLike, train_y: ArrayLike, random_state: int):
-        N = self.init_size
-        # if percentage, calculate the actual number of instances
-        if self.init_size < 1:
-            N = len(train_x) * self.init_size
+    def sample(
+        self,
+        train_x: ArrayLike,
+        train_y: ArrayLike,
+        random_state: Optional[int] = None,
+        initial_batch: bool = False,
+        *args,
+        **kwargs,
+    ) -> (ArrayLike, ArrayLike, ArrayLike, ArrayLike):
+        N = self.batch_size
+        if initial_batch:
+            # if percentage, calculate the actual number of instances
+            if self.init_size < 1:
+                N = len(train_x) * self.init_size
         N = min(len(train_x), N)  # prevent overflow the length
         batch_x = train_x.sample(n=N, random_state=random_state)
         batch_y = train_y.loc[batch_x.index]
@@ -117,12 +125,33 @@ class UncertainMetric(ActiveLearningMetric):
             batch_y,
         )
 
+
+class UncertainMetric(ActiveLearningMetric):
+    def sample_initial(
+        self, train_x: ArrayLike, train_y: ArrayLike, random_state: Optional[int] = None
+    ):
+        N = self.init_size
+        # if percentage, calculate the actual number of instances
+        if self.init_size < 1:
+            N = len(train_x) * self.init_size
+        N = min(len(train_x), N)  # prevent overflow the length
+        batch_x = train_x.sample(n=N, random_state=random_state or self.random_state)
+        batch_y = train_y.loc[batch_x.index]
+        return (
+            train_x.drop(batch_x.index),
+            train_y.drop(batch_y.index),
+            batch_x,
+            batch_y,
+        )
+
     def sample(
-            self,
-            train_x: ArrayLike,
-            train_y: ArrayLike,
-            random_state: int,
-            initial_batch: bool = False,
+        self,
+        train_x: ArrayLike,
+        train_y: ArrayLike,
+        random_state: Optional[int] = None,
+        initial_batch: bool = False,
+        *args,
+        **kwargs,
     ):
         """ Sample based on the uncertainty of unlabeled instances
 
@@ -139,12 +168,16 @@ class UncertainMetric(ActiveLearningMetric):
             ArrayLike: newly sampled batch y
 
         """
+        model = kwargs.get("model", None)
+        if model is None:
+            raise RuntimeError(f"Uncertainty metric requires a `model` parameter")
+
         if initial_batch:
             return self.sample_initial(train_x, train_y, random_state)
 
         if len(train_x) > self.batch_size:
             idx = (
-                self.model.predict_proba(train_x)
+                model.predict_proba(train_x)
                 .max(axis=1)
                 .argpartition(self.batch_size)[: self.batch_size]
             )
