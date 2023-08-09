@@ -10,7 +10,9 @@ from .tools import _download_dataset, _test_download
 
 URL_TEMPLATE = "https://archive.ics.uci.edu/static/public/%s/%s.zip"
 UCI_DB = None
-print(os.getcwd(), os.path.abspath(os.path.curdir))
+
+
+# print(os.getcwd(), os.path.abspath(os.path.curdir))
 
 
 def _load_raw_uci(raw_path: str = "./uci_db.json"):
@@ -35,7 +37,7 @@ def _load_raw_uci(raw_path: str = "./uci_db.json"):
 
 
 def load_uci(
-        name: str, reload: bool = False, test: bool = False, raw_path: str = "./uci_db.json"
+    name: str, reload: bool = False, test: bool = False, raw_path: str = "./uci_db.json"
 ):
     """ Load datasets from UCI repo by name
 
@@ -63,9 +65,9 @@ def load_uci(
             _test_download(url, name)
 
 
-def get_uci_db():
+def get_uci_db() -> dict:
     global UCI_DB
-    return UCI_DB
+    return UCI_DB or {}
 
 
 def iris(path: str):
