@@ -1,4 +1,10 @@
-class BaseModel():
+import numpy as np
+import pandas as pd
+
+from allib.typing import ArrayLike
+
+
+class BaseModel:
     def __init__(self):
         pass
 
@@ -9,6 +15,12 @@ class BaseModel():
         pass
 
     def score(self):
+        pass
+
+    def predict(self, data: ArrayLike) -> ArrayLike:
+        pass
+
+    def predict_proba(self, data: ArrayLike) -> ArrayLike:
         pass
 
     def __get_metric(self):
