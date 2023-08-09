@@ -65,13 +65,13 @@ def _download_file(url: str, path: str, desc: str | None = None):
             req.raise_for_status()
             total = int(req.headers.get("content-length", 0))
             # print(total)
-            with progress:
-                tid = progress.add_task("Download", filename=desc)
-                progress.update(tid, total=total)
-                progress.start_task(tid)
-                for chunk in req.iter_content(chunk_size=__CHUNK_SIZE):
-                    f.write(chunk)
-                    progress.update(tid, advance=len(chunk))
+            for chunk in req.iter_content(chunk_size=__CHUNK_SIZE):
+                f.write(chunk)
+            # with progress:
+            #     tid = progress.add_task("Download", filename=desc)
+            #     progress.update(tid, total=total)
+            #     progress.start_task(tid)
+    print(f"Temp file downloaded: {path}")
 
 
 def _extract_file(src_path: str, dst_path: str = ".", ext: str = "zip"):

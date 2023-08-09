@@ -14,5 +14,5 @@ def ensure_path(path: str, is_dir: bool = True):
 
 def validate_dataset(path: str):
     ensure_path(path)
-    file_list = os.listdir(path)
-    return ".meta" in file_list
+    file_list = [fn.split(".")[-1] for fn in os.listdir(path)]
+    return "names" in file_list
