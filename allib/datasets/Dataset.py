@@ -55,12 +55,14 @@ class Dataset:
         self._split_train_test()
         # if percentage, calculate the actual number of instances
         if init_size < 1:
-            init_size = len(self.u_x) * init_size
+            init_size = int(len(self.u_x) * init_size)
         self._init_size = min(len(self.u_x), init_size)  # prevent overflow the length
 
         self.__n_batches = math.ceil(
             (len(self.u_x) - self._init_size) / self.batch_size
         )
+
+        self.model = None
 
     @property
     def u_size(self) -> int:
@@ -106,6 +108,9 @@ class Dataset:
     def get_testing_set(self) -> (pd.DataFrame, pd.DataFrame):
         return self.test_x, self.test_y
 
+    def bind_model(self, model):
+        self.model = model
+
     def field_info(self):
         """ Statistic on the field types. Save the result in `_meta`, called in init
         """
@@ -132,11 +137,13 @@ class Dataset:
             raise StopIteration
         if self._first_batch:
             self.u_x, self.u_y, nx, ny = self.al_metric(
-                self.u_x, self.u_y, initial_batch=True
+                self.u_x, self.u_y, initial_batch=True, model=self.model
             )
             self._first_batch = False
         else:
-            self.u_x, self.u_y, nx, ny = self.al_metric(self.u_x, self.u_y)
+            self.u_x, self.u_y, nx, ny = self.al_metric(
+                self.u_x, self.u_y, model=self.model
+            )
         # update the `L` set
         self.l_x = pd.concat((self.l_x, nx))
         self.l_y = pd.concat((self.l_y, ny))

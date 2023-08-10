@@ -15,7 +15,7 @@ class ActiveLearningMetric(ABC):
         self,
         # model: BaseModel,
         batch_size: Optional[int] = 10,
-        init_size: Optional[float | int] = 0.1,
+        init_size: Optional[float | int] = None,
         random_state: Optional[int] = 0,
     ):
         """ init the metric and return callable function
@@ -86,7 +86,14 @@ class ActiveLearningMetric(ABC):
             ArrayLike: newly sampled batch x
             ArrayLike: newly sampled batch y
         """
-        return self.sample(train_x, train_y, **kwargs)
+        return self.sample(
+            train_x,
+            train_y,
+            random_state=random_state,
+            initial_batch=initial_batch,
+            *args,
+            **kwargs,
+        )
 
 
 # todo:
@@ -114,7 +121,7 @@ class RandomMetric(ActiveLearningMetric):
         if initial_batch:
             # if percentage, calculate the actual number of instances
             if self.init_size < 1:
-                N = len(train_x) * self.init_size
+                N = int(len(train_x) * self.init_size)
         N = min(len(train_x), N)  # prevent overflow the length
         batch_x = train_x.sample(n=N, random_state=random_state)
         batch_y = train_y.loc[batch_x.index]
@@ -133,7 +140,7 @@ class UncertainMetric(ActiveLearningMetric):
         N = self.init_size
         # if percentage, calculate the actual number of instances
         if self.init_size < 1:
-            N = len(train_x) * self.init_size
+            N = int(len(train_x) * self.init_size)
         N = min(len(train_x), N)  # prevent overflow the length
         batch_x = train_x.sample(n=N, random_state=random_state or self.random_state)
         batch_y = train_y.loc[batch_x.index]
@@ -186,7 +193,7 @@ class UncertainMetric(ActiveLearningMetric):
                 train_x.drop(train_x.index[idx]),
                 train_y.drop(train_y.index[idx]),
                 train_x.loc[train_x.index[idx]],
-                train_y[train_y.index[idx]],
+                train_y.loc[train_y.index[idx]],
             )
         else:
             return (

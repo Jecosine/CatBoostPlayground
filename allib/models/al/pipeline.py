@@ -39,7 +39,7 @@ class ActiveLearningPipeline:
         self.verbose = verbose
         self.n_times = n_times
         self.batch_size_updater = batch_size_updater
-        self.model = model
+        self._model = model
         if len(eval_metrics) == 0:
             raise RuntimeError("Require at least one valid evaluating metrics")
         self.dataset = dataset
@@ -50,6 +50,16 @@ class ActiveLearningPipeline:
         self.current_stat = {}
         self.stats = []
         self.__new_stat()
+        self.dataset.bind_model(self._model)
+
+    @property
+    def model(self):
+        return self._model
+
+    @model.setter
+    def model(self, value):
+        self._model = value
+        self.dataset.bind_model(self._model)
 
     def __new_stat(self):
         if self.current_stat:
