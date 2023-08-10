@@ -69,12 +69,39 @@ def iris(path: Optional[str] = None) -> Tuple[pd.DataFrame, pd.DataFrame]:
     return data, label
 
 
-AVAIL_DATASET = {"iris": iris}
+def adult(path: Optional[str] = None):
+    if not UCI_DB:
+        _load_raw_uci()
+    path = path or os.path.join(CACHE_DIR, "adult")
+    checklists = [os.path.join(path, i) for i in ["adult.data", "adult.test"]]
+    for p in checklists:
+        ensure_path(p, is_dir=False)
+    attrs = UCI_DB["adult"]["attributes"]
+    columns = []
+    cat_idx = []
+    for i, attr in enumerate(attrs):
+        columns.append(attr["name"].strip().lower().replace("-", "_"))
+        if attr["type"] in ["Categorical", "Binary"]:
+            cat_idx.append(i)
+    d1 = pd.read_csv(checklists[0], skiprows=0, names=columns)
+    d2 = pd.read_csv(checklists[1], skiprows=1, names=columns)
+
+    # separate label column
+    data = d1.rename(columns={"income": "label"})
+    label = data.label.apply(str.strip)  # remove space
+    data = data.drop(columns=["label"])
+    testset = d2.rename(columns={"income": "label"})
+    test_y = testset.label.apply(lambda x: x.strip()[:-1])  # remove tail and space
+    test_x = testset.drop(columns=["label"])
+    return (data, label), (test_x, test_y), cat_idx
+
+
+AVAIL_DATASET = {"iris": iris, "adult": adult}
 
 
 def load_uci(
     name: str, reload: bool = False, test: bool = False, raw_path: str = "uci_db.json"
-) -> Tuple[pd.DataFrame, pd.DataFrame]:
+):
     """ Load datasets from UCI repo by name
 
     Args:
