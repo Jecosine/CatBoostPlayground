@@ -48,7 +48,7 @@ def get_uci_db() -> dict:
     return UCI_DB or {}
 
 
-def iris(path: Optional[str] = None) -> Tuple[pd.DataFrame, pd.DataFrame]:
+def iris(path: Optional[str] = None):
     if not UCI_DB:
         _load_raw_uci()
     path = path or os.path.join(CACHE_DIR, "iris")
@@ -66,7 +66,7 @@ def iris(path: Optional[str] = None) -> Tuple[pd.DataFrame, pd.DataFrame]:
     data = data.rename(columns={"class": "label"})
     label = data.label
     data = data.drop(columns=["label"])
-    return data, label
+    return (data, label), (None, None), []
 
 
 def adult(path: Optional[str] = None):

@@ -1,29 +1,34 @@
 from typing import List, Callable, Optional, Tuple
 
+import numpy as np
+from rich.console import Console
+from rich.table import Table
 from tqdm.notebook import tqdm
 
 from ..core import BaseModel
 from ...datasets import Dataset
 from ...typing import ArrayLike
-from .al_metrics import ActiveLearningMetric
-
-from rich.console import Console
-from rich.table import Table
 
 
 # todo: handle tailing instances (merged to former?)
 class ActiveLearningPipeline:
-    _params = ["dataset", "model", "stats"]
+    # list/dict/obj are settable
+    _params = ["model", "stats", "seeds", "current_stat"]
 
     def __init__(
         self,
         model: BaseModel,
+        model_maker: Callable,
         dataset: Dataset,
         eval_metrics: List[Callable],
         eval_set: Optional[Tuple[ArrayLike, ArrayLike]] = None,
         batch_size_updater: Optional[Callable] = None,
         n_times: int = 1,
         verbose: bool = True,
+        seeds: List[int] = None,
+        early_stop: int = 20,
+        *args,
+        **kwargs
     ):
         """ Initialize the pipeline
 
@@ -35,9 +40,16 @@ class ActiveLearningPipeline:
             batch_size_updater: callable function that updates the batch size during training
             n_times: times to run the pipeline
             verbose: print logs / draw progress for each run
+            seeds: random seed list for each run
         """
         self.verbose = verbose
         self.n_times = n_times
+        self.early_stop = early_stop
+        self.model_maker = model_maker
+        self.seeds = seeds if seeds is not None else np.random.randint(low=0, high=n_times * 10, size=(n_times, ))
+        if len(self.seeds) != n_times:
+            raise RuntimeError("seed number does not consists with n times")
+
         self.batch_size_updater = batch_size_updater
         self._model = model
         if len(eval_metrics) == 0:
@@ -50,7 +62,7 @@ class ActiveLearningPipeline:
         self.current_stat = {}
         self.stats = []
         self.__new_stat()
-        self.dataset.bind_model(self._model)
+        self.dataset.bind_params(self.params)
 
     @property
     def model(self):
@@ -59,16 +71,18 @@ class ActiveLearningPipeline:
     @model.setter
     def model(self, value):
         self._model = value
-        self.dataset.bind_model(self._model)
+        self.dataset.bind_params(self.params)
 
     def __new_stat(self):
         if self.current_stat:
             self.stats.append(self.current_stat)
         self.current_stat = {mc.__name__: [] for mc in self.__eval_metrics} | {
-            "instances": []
+            "instances": [],
+            "snapshot": []
         }
 
-    def get_params(self):
+    @property
+    def params(self):
         return {k: object.__getattribute__(self, k) for k in self._params}
 
     def apply_eval_metrics(self):
@@ -79,8 +93,8 @@ class ActiveLearningPipeline:
             self.current_stat[mc.__name__].append(
                 mc(
                     estimator=self.model,
-                    X=self.__eval_set[0],
-                    y_true=self.__eval_set[1],
+                    X=self.dataset.test_x,
+                    y_true=self.dataset.test_y,
                 )
             )
 
@@ -102,6 +116,16 @@ class ActiveLearningPipeline:
         """ [OVERRIDE NEEDED] Run one epoch """
         pass
 
+    def before_run(self, n_iter: Optional[int] = None):
+        """ [OVERRIDE NEEDED] Exec before each run """
+        # init random state of dataset
+        self.dataset.bind_params(self.params)
+        self.dataset.update_iteration(n_iter)
+
+    def after_run(self, n_iter: Optional[int] = None):
+        self.dataset.bind_params(self.params)
+        self.dataset.update_iteration(n_iter)
+
     def run(self, n_iter: Optional[int] = None):
         """ [OVERRIDE NEEDED] Run whole pipeline once """
         # ...
@@ -114,8 +138,10 @@ class ActiveLearningPipeline:
         """ [OVERRIDE NEEDED] Run the pipeline n times """
         prog = tqdm(range(self.n_times)) if self.verbose else range(self.n_times)
         for i in prog:
+            self.before_run(n_iter=i)
             self.run(n_iter=i)
+            self.after_run(n_iter=i)
             # self.apply_eval_metrics()
             # self.print_score()
             self.__new_stat()
-            self.dataset.reset()
+            # self.dataset.reset()
