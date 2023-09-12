@@ -1,5 +1,17 @@
 import os
+import re
 
+
+def newest_sample(template: str, ext: str = ".jpg", cur_dir=".", zf: int = 4, c: int = 0):
+    flist = [i for i in os.listdir(cur_dir) if i.endswith(ext)]
+    c = 0
+    for i in flist:
+        res = re.match(template, i)
+        if res:
+            res = res.groups()[0]
+            zf = len(res)
+            c = max(c, int(res))
+    return c, zf
 
 def ensure_path(path: str, is_dir: bool = True):
     try:
