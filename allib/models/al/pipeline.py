@@ -18,9 +18,9 @@ class ActiveLearningPipeline:
     def __init__(
         self,
         model: BaseModel,
-        model_maker: Callable,
         dataset: Dataset,
         eval_metrics: List[Callable],
+        model_maker: Optional[Callable] = None,
         eval_set: Optional[Tuple[ArrayLike, ArrayLike]] = None,
         batch_size_updater: Optional[Callable] = None,
         n_times: int = 1,
@@ -78,7 +78,8 @@ class ActiveLearningPipeline:
             self.stats.append(self.current_stat)
         self.current_stat = {mc.__name__: [] for mc in self.__eval_metrics} | {
             "instances": [],
-            "snapshot": []
+            "snapshot": [],
+            "model_snapshots": []
         }
 
     @property

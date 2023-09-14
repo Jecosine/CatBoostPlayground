@@ -169,7 +169,7 @@ class UncertainMetric(ActiveLearningMetric):
         }[self.name]
 
     def __func_uncertainty(self, pred: ArrayLike):
-        return arg_bottomk(pred, self.batch_size)
+        return arg_bottomk(pred.max(axis=1), self.batch_size)
 
     def __func_margin(self, pred: ArrayLike):
         margin = np.partition(-pred, 1, axis=1)
@@ -212,7 +212,7 @@ class UncertainMetric(ActiveLearningMetric):
             return self.sample_initial(train_x, train_y, random_state)
 
         if len(train_x) > self.batch_size:
-            pred = model.predict_proba(train_x).max(axis=1)
+            pred = model.predict_proba(train_x)
             idx = self.func_strategy(pred)
             self.current_idx = train_x.index[idx].copy()
             return (

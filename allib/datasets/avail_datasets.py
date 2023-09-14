@@ -10,7 +10,7 @@ import pandas as pd
 from allib.constants import *
 from allib.utils import ensure_path, validate_dataset
 from .tools import _download_dataset, _test_download
-
+from .Dataset import Dataset
 
 URL_TEMPLATE = "https://archive.ics.uci.edu/static/public/%s/%s.zip"
 UCI_DB = None
@@ -66,7 +66,8 @@ def iris(path: Optional[str] = None):
     data = data.rename(columns={"class": "label"})
     label = data.label
     data = data.drop(columns=["label"])
-    return (data, label), (None, None), []
+    # return (data, label), (None, None), []
+    return Dataset(data=data, label=label, al_metric=None, shuffle=False, init_size=30, batch_size=20)
 
 
 def adult(path: Optional[str] = None):
@@ -93,7 +94,11 @@ def adult(path: Optional[str] = None):
     testset = d2.rename(columns={"income": "label"})
     test_y = testset.label.apply(lambda x: x.strip()[:-1])  # remove tail and space
     test_x = testset.drop(columns=["label"])
-    return (data, label), (test_x, test_y), cat_idx
+    # todo: batch size setting
+    dataset = Dataset(data=data, label=label, al_metric=None, shuffle=False, init_size=30, batch_size=50)
+    dataset.info["cat_idx"] = cat_idx
+    dataset.test_x, dataset.test_y = test_x, test_y
+    return dataset
 
 
 AVAIL_DATASET = {"iris": iris, "adult": adult}
@@ -101,7 +106,7 @@ AVAIL_DATASET = {"iris": iris, "adult": adult}
 
 def load_uci(
     name: str, reload: bool = False, test: bool = False, raw_path: str = "uci_db.json"
-):
+) -> Dataset:
     """ Load datasets from UCI repo by name
 
     Args:

@@ -27,3 +27,7 @@ def make_recipt(dss: list, alms: list, ms: list, conf: dict):
             dataset = Dataset(data, label, al_metric=alm, shuffle=False, **ds_confs[ds_idx])
             for m_idx, m in enumerate(ms):
                 ppls[(ds, alm_name, m)] = ppl_maker(**ppl_conf, **model_confs[m_idx])
+
+
+def draw_boundary():
+    pass

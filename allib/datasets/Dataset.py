@@ -8,9 +8,6 @@ from sklearn.utils import shuffle as sf
 from allib.models.al import ActiveLearningMetric
 from allib.typing import ArrayLike
 
-AVAIL_DATASET = {}
-
-
 # todo:
 # 1. statistics on a dataset
 # 2. dataset maker, using same data with multiple metrics
@@ -26,7 +23,7 @@ class Dataset:
         self,
         data: ArrayLike,
         label: ArrayLike,
-        al_metric: ActiveLearningMetric,
+        al_metric: ActiveLearningMetric | None,
         shuffle: bool,
         init_size: float | int,
         batch_size: int,
@@ -66,6 +63,10 @@ class Dataset:
         }
 
         self.model = None
+        # todo
+        self.info = {
+            "cat_idx": None
+        }
 
     @property
     def u_size(self) -> int:
@@ -111,6 +112,16 @@ class Dataset:
         #     raise RuntimeError("[Dataset] seeds should be list of int")
         self.random_state = seeds[n_iter]
         self.reset()
+
+    def with_metric(self, metric: ActiveLearningMetric, extra_params: dict = None):
+        if extra_params is None:
+            extra_params = {}
+        extra_params = {
+            "shuffle": False,
+            "init_size": self._init_size,
+            "batch_size": self.batch_size,
+        } | extra_params
+        return Dataset(data=self._data.copy(), label=self._label.copy(), al_metric=metric, **extra_params)
 
     def get_training_set(self) -> (pd.DataFrame, pd.DataFrame):
         return self.l_x, self.l_y
