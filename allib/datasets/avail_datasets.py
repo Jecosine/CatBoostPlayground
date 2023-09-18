@@ -3,14 +3,14 @@ import logging
 import os.path
 import pickle
 from importlib import resources
-from typing import Optional, Tuple
+from typing import Optional
 
 import pandas as pd
 
 from allib.constants import *
 from allib.utils import ensure_path, validate_dataset
-from .tools import _download_dataset, _test_download
 from .Dataset import Dataset
+from .tools import _download_dataset, _test_download
 
 URL_TEMPLATE = "https://archive.ics.uci.edu/static/public/%s/%s.zip"
 UCI_DB = None
@@ -67,7 +67,14 @@ def iris(path: Optional[str] = None):
     label = data.label
     data = data.drop(columns=["label"])
     # return (data, label), (None, None), []
-    return Dataset(data=data, label=label, al_metric=None, shuffle=False, init_size=30, batch_size=20)
+    return Dataset(
+        data=data,
+        label=label,
+        al_metric=None,
+        shuffle=False,
+        init_size=30,
+        batch_size=20,
+    )
 
 
 def adult(path: Optional[str] = None):
@@ -95,13 +102,116 @@ def adult(path: Optional[str] = None):
     test_y = testset.label.apply(lambda x: x.strip()[:-1])  # remove tail and space
     test_x = testset.drop(columns=["label"])
     # todo: batch size setting
-    dataset = Dataset(data=data, label=label, al_metric=None, shuffle=False, init_size=30, batch_size=50)
+    dataset = Dataset(
+        data=data,
+        label=label,
+        al_metric=None,
+        shuffle=False,
+        init_size=30,
+        batch_size=50,
+    )
     dataset.info["cat_idx"] = cat_idx
     dataset.test_x, dataset.test_y = test_x, test_y
     return dataset
 
 
-AVAIL_DATASET = {"iris": iris, "adult": adult}
+def yeast(path: Optional[str] = None):
+    if not UCI_DB:
+        _load_raw_uci()
+    path = path or os.path.join(CACHE_DIR, "yeast")
+    checklists = [os.path.join(path, i) for i in ["yeast.data", "yeast.names"]]
+    for p in checklists:
+        ensure_path(p, is_dir=False)
+    attrs = UCI_DB["yeast"]["attributes"]
+    columns = []
+    cat_idx = []
+    for i, attr in enumerate(attrs):
+        columns.append(attr["name"].strip().lower().replace("-", "_"))
+    d = pd.read_csv(checklists[0], skiprows=0, delim_whitespace=True, names=columns)
+    # separate label column
+    data = d.rename(columns={"localization_site": "label"})
+    label = data.label.apply(str.strip)  # remove space
+    data = data.drop(columns=["sequence_name", "label"])
+    dataset = Dataset(
+        data=data,
+        label=label,
+        al_metric=None,
+        shuffle=False,
+        init_size=30,
+        batch_size=20,
+    )
+    dataset.info["cat_idx"] = cat_idx
+    return dataset
+
+
+def letter_recognition(path: Optional[str] = None):
+    if not UCI_DB:
+        _load_raw_uci()
+    path = path or os.path.join(CACHE_DIR, "letter-recognition")
+    checklists = [os.path.join(path, i) for i in [
+        "letter-recognition.data",
+        "letter-recognition.names",
+        "letter-recognition.data.Z"]]
+    for p in checklists:
+        ensure_path(p, is_dir=False)
+    attrs = UCI_DB["letter-recognition"]["attributes"]
+    columns = []
+    cat_idx = []
+    for i, attr in enumerate(attrs):
+        columns.append(attr["name"].strip().lower().replace("-", "_"))
+    d = pd.read_csv(checklists[0], skiprows=0, names=columns)
+    data = d.rename(columns={"lettr": "label"})
+    label = data.label.apply(str.strip)  # remove space
+    data = data.drop(columns=["label"])
+    dataset = Dataset(
+        data=data, label=label, al_metric=None, shuffle=False, init_size=30, batch_size=50,
+    )
+    dataset.info["cat_idx"] = cat_idx
+    return dataset
+
+
+def image_segmentation(path: Optional[str] = None):
+    if not UCI_DB:
+        _load_raw_uci()
+    path = path or os.path.join(CACHE_DIR, "image-segmentation")
+    checklists = [os.path.join(path, i) for i in [
+        "segmentation.data",
+        "segmentation.names",
+        "segmentation.test"]]
+    for p in checklists:
+        ensure_path(p, is_dir=False)
+    attrs = UCI_DB["image-segmentation"]["attributes"]
+    columns = []
+    cat_idx = []
+    for i, attr in enumerate(attrs):
+        columns.append(attr["name"].strip().lower().replace("-", "_"))
+    d1 = pd.read_csv(
+        "dataset_cache/image-segmentation/segmentation.data", skiprows=5, names=columns
+    )
+    d2 = pd.read_csv(
+        "dataset_cache/image-segmentation/segmentation.test", skiprows=5, names=columns
+    )
+    data = d1.rename(columns={"class": "label"})
+    label = data.label.apply(str.strip)
+    data = data.drop(columns=["label"])
+    test_x = d2.rename(columns={"class": "label"})
+    test_y = test_x.label.apply(str.strip)
+    test_x = test_x.drop(columns=["label"])
+    dataset = Dataset(
+        data=data, label=label, al_metric=None, shuffle=False, init_size=30, batch_size=20,
+    )
+    dataset.info["cat_idx"] = cat_idx
+    dataset.test_x, dataset.test_y = test_x, test_y
+    return dataset
+
+
+AVAIL_DATASET = {
+    "iris"               : iris,
+    "adult"              : adult,
+    "yeast"              : yeast,
+    "letter-recognition" : letter_recognition,
+    "image-segmentation" : image_segmentation
+}
 
 
 def load_uci(
