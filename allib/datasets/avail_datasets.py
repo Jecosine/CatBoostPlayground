@@ -10,10 +10,10 @@ import pandas as pd
 from allib.constants import *
 from allib.utils import ensure_path, validate_dataset
 from .Dataset import Dataset
-from .tools import _download_dataset, _test_download
+from .tools import _download_dataset, _test_download, _get_feature_info, apply_cat_dtypes
 
 URL_TEMPLATE = "https://archive.ics.uci.edu/static/public/%s/%s.zip"
-UCI_DB = None
+UCI_DB: dict | None = None
 
 
 __logger = logging.Logger(__name__)
@@ -52,15 +52,15 @@ def iris(path: Optional[str] = None):
     if not UCI_DB:
         _load_raw_uci()
     path = path or os.path.join(CACHE_DIR, "iris")
-    checklists = [os.path.join(path, i) for i in ["iris.data", "bezdekIris.data"]]
-    for p in checklists:
+    checklist = [os.path.join(path, i) for i in ["iris.data", "bezdekIris.data"]]
+    for p in checklist:
         ensure_path(p, is_dir=False)
     attrs = UCI_DB["iris"]["attributes"]
     columns = []
     for attr in attrs:
         columns.append(attr["name"].strip().lower().replace(" ", "_"))
-    d1 = pd.read_csv(checklists[0], skiprows=0, names=columns)
-    d2 = pd.read_csv(checklists[1], skiprows=0, names=columns)
+    d1 = pd.read_csv(checklist[0], skiprows=0, names=columns)
+    d2 = pd.read_csv(checklist[1], skiprows=0, names=columns)
     data = pd.concat((d1, d2)).reset_index(drop=True)
     # separate label column
     data = data.rename(columns={"class": "label"})
@@ -70,9 +70,9 @@ def iris(path: Optional[str] = None):
     return Dataset(
         data=data,
         label=label,
-        al_metric=None,
+        al_strategy=None,
         shuffle=False,
-        init_size=30,
+        init_size=50,
         batch_size=20,
     )
 
@@ -81,23 +81,27 @@ def adult(path: Optional[str] = None):
     if not UCI_DB:
         _load_raw_uci()
     path = path or os.path.join(CACHE_DIR, "adult")
-    checklists = [os.path.join(path, i) for i in ["adult.data", "adult.test"]]
-    for p in checklists:
+    checklist = [os.path.join(path, i) for i in ["adult.data", "adult.test"]]
+    for p in checklist:
         ensure_path(p, is_dir=False)
     attrs = UCI_DB["adult"]["attributes"]
     columns = []
     cat_idx = []
     for i, attr in enumerate(attrs):
         columns.append(attr["name"].strip().lower().replace("-", "_"))
-        if attr["type"] in ["Categorical", "Binary"]:
+        if attr["type"] in ["Categorical", "Binary"] and attr["role"] != "Target":
             cat_idx.append(i)
-    d1 = pd.read_csv(checklists[0], skiprows=0, names=columns)
-    d2 = pd.read_csv(checklists[1], skiprows=1, names=columns)
-
+    d1 = pd.read_csv(checklist[0], skiprows=0, names=columns, skipinitialspace=True)
+    d2 = pd.read_csv(checklist[1], skiprows=1, names=columns, skipinitialspace=True)
+    # remove invalid row
+    d1 = d1[d1.apply(lambda row: any(row != "?"), axis=1)]
+    d2 = d2[d2.apply(lambda row: any(row != "?"), axis=1)]
     # separate label column
     data = d1.rename(columns={"income": "label"})
     label = data.label.apply(str.strip)  # remove space
     data = data.drop(columns=["label"])
+    # apply cat columns
+    data = apply_cat_dtypes(data, cat_idx)
     testset = d2.rename(columns={"income": "label"})
     test_y = testset.label.apply(lambda x: x.strip()[:-1])  # remove tail and space
     test_x = testset.drop(columns=["label"])
@@ -105,9 +109,9 @@ def adult(path: Optional[str] = None):
     dataset = Dataset(
         data=data,
         label=label,
-        al_metric=None,
+        al_strategy=None,
         shuffle=False,
-        init_size=30,
+        init_size=60,
         batch_size=50,
     )
     dataset.info["cat_idx"] = cat_idx
@@ -119,25 +123,26 @@ def yeast(path: Optional[str] = None):
     if not UCI_DB:
         _load_raw_uci()
     path = path or os.path.join(CACHE_DIR, "yeast")
-    checklists = [os.path.join(path, i) for i in ["yeast.data", "yeast.names"]]
-    for p in checklists:
+    checklist = [os.path.join(path, i) for i in ["yeast.data", "yeast.names"]]
+    for p in checklist:
         ensure_path(p, is_dir=False)
     attrs = UCI_DB["yeast"]["attributes"]
     columns = []
     cat_idx = []
     for i, attr in enumerate(attrs):
         columns.append(attr["name"].strip().lower().replace("-", "_"))
-    d = pd.read_csv(checklists[0], skiprows=0, delim_whitespace=True, names=columns)
+    d = pd.read_csv(checklist[0], skiprows=0, delim_whitespace=True, names=columns)
     # separate label column
     data = d.rename(columns={"localization_site": "label"})
     label = data.label.apply(str.strip)  # remove space
     data = data.drop(columns=["sequence_name", "label"])
+    data = apply_cat_dtypes(data, cat_idx)
     dataset = Dataset(
         data=data,
         label=label,
-        al_metric=None,
+        al_strategy=None,
         shuffle=False,
-        init_size=30,
+        init_size=50,
         batch_size=20,
     )
     dataset.info["cat_idx"] = cat_idx
@@ -148,23 +153,24 @@ def letter_recognition(path: Optional[str] = None):
     if not UCI_DB:
         _load_raw_uci()
     path = path or os.path.join(CACHE_DIR, "letter-recognition")
-    checklists = [os.path.join(path, i) for i in [
+    checklist = [os.path.join(path, i) for i in [
         "letter-recognition.data",
         "letter-recognition.names",
         "letter-recognition.data.Z"]]
-    for p in checklists:
+    for p in checklist:
         ensure_path(p, is_dir=False)
     attrs = UCI_DB["letter-recognition"]["attributes"]
     columns = []
     cat_idx = []
     for i, attr in enumerate(attrs):
         columns.append(attr["name"].strip().lower().replace("-", "_"))
-    d = pd.read_csv(checklists[0], skiprows=0, names=columns)
+    d = pd.read_csv(checklist[0], skiprows=0, names=columns)
     data = d.rename(columns={"lettr": "label"})
     label = data.label.apply(str.strip)  # remove space
     data = data.drop(columns=["label"])
+    data = apply_cat_dtypes(data, cat_idx)
     dataset = Dataset(
-        data=data, label=label, al_metric=None, shuffle=False, init_size=30, batch_size=50,
+        data=data, label=label, al_strategy=None, shuffle=False, init_size=60, batch_size=50,
     )
     dataset.info["cat_idx"] = cat_idx
     return dataset
@@ -174,11 +180,11 @@ def image_segmentation(path: Optional[str] = None):
     if not UCI_DB:
         _load_raw_uci()
     path = path or os.path.join(CACHE_DIR, "image-segmentation")
-    checklists = [os.path.join(path, i) for i in [
+    checklist = [os.path.join(path, i) for i in [
         "segmentation.data",
         "segmentation.names",
         "segmentation.test"]]
-    for p in checklists:
+    for p in checklist:
         ensure_path(p, is_dir=False)
     attrs = UCI_DB["image-segmentation"]["attributes"]
     columns = []
@@ -194,23 +200,100 @@ def image_segmentation(path: Optional[str] = None):
     data = d1.rename(columns={"class": "label"})
     label = data.label.apply(str.strip)
     data = data.drop(columns=["label"])
+    data = apply_cat_dtypes(data, cat_idx)
     test_x = d2.rename(columns={"class": "label"})
     test_y = test_x.label.apply(str.strip)
     test_x = test_x.drop(columns=["label"])
+    test_x = apply_cat_dtypes(test_x, cat_idx)
+
     dataset = Dataset(
-        data=data, label=label, al_metric=None, shuffle=False, init_size=30, batch_size=20,
+        data=data, label=label, al_strategy=None, shuffle=False, init_size=50, batch_size=20,
     )
     dataset.info["cat_idx"] = cat_idx
     dataset.test_x, dataset.test_y = test_x, test_y
     return dataset
 
 
-AVAIL_DATASET = {
-    "iris"               : iris,
-    "adult"              : adult,
-    "yeast"              : yeast,
-    "letter-recognition" : letter_recognition,
-    "image-segmentation" : image_segmentation
+def balance_scale(path: Optional[str] = None):
+    if not UCI_DB:
+        _load_raw_uci()
+    path = path or os.path.join(CACHE_DIR, "balance-scale")
+    checklist = [os.path.join(path, i) for i in [
+        "balance-scale.data",
+        "balance-scale.names"]]
+    for p in checklist:
+        ensure_path(p, is_dir=False)
+    columns, cat_idx = _get_feature_info(UCI_DB, "balance-scale")
+    d = pd.read_csv(
+        checklist[0], skiprows=0, names=columns
+    )
+    data = d.rename(columns={"class_name": "label"})
+    label = data.label
+    data = data.drop(columns=["label"])
+    data = apply_cat_dtypes(data, cat_idx)
+
+    dataset = Dataset(data=data, label=label, al_strategy=None, shuffle=False, init_size=50, batch_size=20)
+    dataset.info["cat_idx"] = cat_idx
+    return dataset
+
+
+def glass_identification(path: Optional[str] = None):
+    if not UCI_DB:
+        _load_raw_uci()
+    path = path or os.path.join(CACHE_DIR, "glass")
+    checklist = [
+        os.path.join(path, i) for i in ["glass.data", "glass.names"]
+    ]
+    for p in checklist:
+        ensure_path(p, is_dir=False)
+    columns, cat_idx = _get_feature_info(UCI_DB, "glass-identification")
+    d = pd.read_csv(
+        "dataset_cache/glass-identification/glass.data", skiprows=0, names=columns
+    )
+    data = d.rename(columns={"type_of_glass": "label"})
+    label = data.label
+    data = data.drop(columns=["id_number", "label"])
+    data = apply_cat_dtypes(data, cat_idx)
+
+    dataset = Dataset(
+        data=data, label=label, al_strategy=None, shuffle=False, init_size=30, batch_size=10
+    )
+    dataset.info["cat_idx"] = cat_idx
+    return dataset
+
+
+def wine(path: Optional[str] = None):
+    if not UCI_DB:
+        _load_raw_uci()
+    path = path or os.path.join(CACHE_DIR, "wine")
+    checklist = [os.path.join(path, i) for i in [
+        "wine.data",
+        "wine.names"]]
+    for p in checklist:
+        ensure_path(p, is_dir=False)
+    columns, cat_idx = _get_feature_info(UCI_DB, "wine")
+    d = pd.read_csv(
+        checklist[0], skiprows=0, names=columns
+    )
+    data = d.rename(columns={"class": "label"})
+    label = data.label
+    data = data.drop(columns=["label"])
+    data = apply_cat_dtypes(data, cat_idx)
+
+    dataset = Dataset(data=data, label=label, al_strategy=None, shuffle=False, init_size=20, batch_size=5)
+    dataset.info["cat_idx"] = cat_idx
+    return dataset
+
+
+AVAIL_DATASETS = {
+    "iris"                 : iris,
+    "adult"                : adult,
+    "yeast"                : yeast,
+    "letter-recognition"   : letter_recognition,
+    "image-segmentation"   : image_segmentation,
+    "balance-scale"        : balance_scale,
+    "glass-identification" : glass_identification,
+    "wine"                 : wine
 }
 
 
@@ -232,7 +315,7 @@ def load_uci(
         _load_raw_uci(raw_path)
     name = name.lower()
     if name not in UCI_DB:
-        # todo: new exception
+        # todo: new exception44
         raise RuntimeError(f"Cannot find {name} in UCI Repo")
     dataset = UCI_DB[name]
     dataset_path = os.path.join(CACHE_DIR, name)
@@ -244,10 +327,10 @@ def load_uci(
         else:
             _test_download(url, name)
 
-    if name not in AVAIL_DATASET:
+    if name not in AVAIL_DATASETS:
         __logger.warning(
             f"Dataset {name} downloaded, but it need to be manually processed"
         )
     else:
-        handler = AVAIL_DATASET[name]
+        handler = AVAIL_DATASETS[name]
         return handler()

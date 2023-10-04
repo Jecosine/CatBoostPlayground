@@ -1,9 +1,11 @@
 import hashlib
 import logging
 import os
+import warnings
 import zipfile
-from typing import Optional
+from typing import Optional, List
 
+import pandas as pd
 # from tqdm import tqdm
 import requests
 import tempfile
@@ -112,3 +114,35 @@ def _test_download(url: str, desc: Optional[str]):
     with requests.get(url, stream=True, headers={"Accept-Encoding": None}) as req:
         req.raise_for_status()
         logger.debug(f"""testing {desc} ... {req.headers.get("Content-Length", 0)}""")
+
+
+def _get_feature_info(info: dict, dataset_name: str):
+    columns = []
+    cat_idx = []
+    for idx, attr in enumerate(info[dataset_name]["attributes"]):
+        a = attr["name"].strip().lower().replace("-", "_").replace(" ", "_")
+        columns.append(a)
+        if attr["type"] in ["Categorical", "Binary"] and attr["role"] != "Target":
+            cat_idx.append(idx)
+    return columns, cat_idx
+
+
+def apply_cat_dtypes(data: pd.DataFrame, cat_idx: list):
+    columns = list(data.columns)
+    if len(cat_idx) == 0:
+        return data
+    for idx in cat_idx:
+        if idx >= len(columns):
+            warnings.warn("Cat idx out of range, make sure the idx is correct")
+            continue
+        data[columns[idx]] = data[columns[idx]].astype("category")
+    return data
+
+
+def get_cat_idx(data: pd.DataFrame) -> List[int]:
+    columns = data.columns
+    cat_idx = []
+    for idx, col in enumerate(columns):
+        if pd.api.types.is_categorical_dtype(data[col]):
+            cat_idx.append(idx)
+    return cat_idx
