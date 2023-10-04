@@ -3,7 +3,8 @@ from typing import List, Callable, Optional, Tuple
 import numpy as np
 from rich.console import Console
 from rich.table import Table
-from tqdm.notebook import tqdm
+# from tqdm.notebook import tqdm
+from tqdm import tqdm
 
 from ..core import BaseModel
 from ...datasets import Dataset
@@ -77,6 +78,7 @@ class ActiveLearningPipeline:
         if self.current_stat:
             self.stats.append(self.current_stat)
         self.current_stat = {mc.__name__: [] for mc in self.__eval_metrics} | {
+            "seed": -1,
             "instances": [],
             "snapshot": [],
             "model_snapshots": []
@@ -122,6 +124,7 @@ class ActiveLearningPipeline:
         # init random state of dataset
         self.dataset.bind_params(self.params)
         self.dataset.update_iteration(n_iter)
+        self.current_stat["seed"] = self.seeds[n_iter]
 
     def after_run(self, n_iter: Optional[int] = None):
         self.dataset.bind_params(self.params)
