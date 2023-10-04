@@ -161,3 +161,7 @@ cython_debug/
 /tutorial/catboost_info/
 
 **/*cache/
+**/processed_datasets/
+**/catboost_info/
+*.png
+.idea/
