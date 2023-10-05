@@ -1,7 +1,7 @@
 from operator import itemgetter
 
 from ..metrics import get_metrics
-from ..models.al import ActiveLearningMetric, ActiveLearningPipeline
+from ..models.al import ActiveLearningStrategy, ActiveLearningPipeline
 from ..datasets import Dataset, load_uci
 
 
@@ -24,7 +24,7 @@ def make_recipt(dss: list, alms: list, ms: list, conf: dict):
         for al_idx, alm_name in enumerate(alms):
             alc = alm_ctors[al_idx]
             alm = alc(**alm_confs[al_idx], **ds_confs[ds_idx])
-            dataset = Dataset(data, label, al_metric=alm, shuffle=False, **ds_confs[ds_idx])
+            dataset = Dataset(data, label, al_strategy=alm, shuffle=False, **ds_confs[ds_idx])
             for m_idx, m in enumerate(ms):
                 ppls[(ds, alm_name, m)] = ppl_maker(**ppl_conf, **model_confs[m_idx])
 
