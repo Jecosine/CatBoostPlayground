@@ -64,7 +64,10 @@ class PLMetric(BasePlot):
             ax.fill_between(instances, q1, q3, alpha=0.1)
             ax.plot(instances, med, label=strategies[idx])
         # ax.set_ylim(0, 1)
+        ax.set_xlabel("Instances")
+        ax.set_ylabel(f"{metric_name}")
         ax.legend()
         if post_plot:
             post_plot(metric_name, instances, metrics_n_times, strategies)
         fig.savefig(os.path.join(self.output_path, plot_name))
+        plt.close(fig)

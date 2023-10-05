@@ -35,7 +35,7 @@ model_dict = {
 # ---------------- DATASET ---------------
 # all_datasets = list(AVAIL_DATASETS.keys())
 all_preprocesses = [
-    "continuous_to_categorical"
+    # "continuous_to_categorical"
     "pca_3",
     # "pca_2",
     # "origin"
@@ -58,7 +58,8 @@ cat_strategies = [
 al_strategies =[
     *cat_strategies,
     "ranked_batch",
-    "information_density"
+    "information_density",
+    "gsx"
 ]
 
 cat_confs = [
@@ -70,7 +71,8 @@ al_confs = [
     *cat_confs,
     # todo
     [{"dist_metric": metric} for metric in ["cosine", "euclidean"]],
-    [{"similarity_metric": metric} for metric in ["cosine", "euclidean"]]
+    [{"similarity_metric": metric} for metric in ["cosine", "euclidean"]],
+    [{}]
 ]
 
 
@@ -116,7 +118,7 @@ def plot(dataset_name: str, model_name: str):
     for idx, confs in enumerate(al_confs):
         for cid, conf in enumerate(confs):
             stats = None
-            cache_name = f"{dataset_name}@{model_name}@{al_strategies[idx]}_{cid}@x20.pkl"
+            cache_name = f"{dataset_name.replace('/', '_')}@{model_name}@{al_strategies[idx]}_{cid}@x20.pkl"
             if not os.path.isfile(os.path.join("ppl_cache", cache_name)):
                 continue
             with open(os.path.join("ppl_cache", cache_name), "rb") as f:
@@ -150,5 +152,5 @@ if __name__ == "__main__":
             print("[MAIN] Checkout to cat models")
             avail_models = cat_models
         for mdn in avail_models:
-            run_pipeline(dsn, mdn)
-            # plot(dsn, mdn)
+            # run_pipeline(dsn, mdn)
+            plot(dsn, mdn)
