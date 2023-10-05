@@ -64,6 +64,7 @@ def iris(path: Optional[str] = None):
     data = pd.concat((d1, d2)).reset_index(drop=True)
     # separate label column
     data = data.rename(columns={"class": "label"})
+    data = data[~data.duplicated()]
     label = data.label
     data = data.drop(columns=["label"])
     # return (data, label), (None, None), []
@@ -98,11 +99,13 @@ def adult(path: Optional[str] = None):
     d2 = d2[d2.apply(lambda row: any(row != "?"), axis=1)]
     # separate label column
     data = d1.rename(columns={"income": "label"})
+    data = data[~data.duplicated()]
     label = data.label.apply(str.strip)  # remove space
     data = data.drop(columns=["label"])
     # apply cat columns
     data = apply_cat_dtypes(data, cat_idx)
     testset = d2.rename(columns={"income": "label"})
+    testset = testset[~testset.duplicated()]
     test_y = testset.label.apply(lambda x: x.strip()[:-1])  # remove tail and space
     test_x = testset.drop(columns=["label"])
     # todo: batch size setting
@@ -134,6 +137,7 @@ def yeast(path: Optional[str] = None):
     d = pd.read_csv(checklist[0], skiprows=0, delim_whitespace=True, names=columns)
     # separate label column
     data = d.rename(columns={"localization_site": "label"})
+    data = data[~data.duplicated()]
     label = data.label.apply(str.strip)  # remove space
     data = data.drop(columns=["sequence_name", "label"])
     data = apply_cat_dtypes(data, cat_idx)
@@ -166,6 +170,7 @@ def letter_recognition(path: Optional[str] = None):
         columns.append(attr["name"].strip().lower().replace("-", "_"))
     d = pd.read_csv(checklist[0], skiprows=0, names=columns)
     data = d.rename(columns={"lettr": "label"})
+    data = data[~data.duplicated()]
     label = data.label.apply(str.strip)  # remove space
     data = data.drop(columns=["label"])
     data = apply_cat_dtypes(data, cat_idx)
@@ -198,6 +203,7 @@ def image_segmentation(path: Optional[str] = None):
         "dataset_cache/image-segmentation/segmentation.test", skiprows=5, names=columns
     )
     data = d1.rename(columns={"class": "label"})
+    data = data[~data.duplicated()]
     label = data.label.apply(str.strip)
     data = data.drop(columns=["label"])
     data = apply_cat_dtypes(data, cat_idx)
@@ -228,6 +234,7 @@ def balance_scale(path: Optional[str] = None):
         checklist[0], skiprows=0, names=columns
     )
     data = d.rename(columns={"class_name": "label"})
+    data = data[~data.duplicated()]
     label = data.label
     data = data.drop(columns=["label"])
     data = apply_cat_dtypes(data, cat_idx)
@@ -251,6 +258,7 @@ def glass_identification(path: Optional[str] = None):
         "dataset_cache/glass-identification/glass.data", skiprows=0, names=columns
     )
     data = d.rename(columns={"type_of_glass": "label"})
+    data = data[~data.duplicated()]
     label = data.label
     data = data.drop(columns=["id_number", "label"])
     data = apply_cat_dtypes(data, cat_idx)
@@ -276,6 +284,7 @@ def wine(path: Optional[str] = None):
         checklist[0], skiprows=0, names=columns
     )
     data = d.rename(columns={"class": "label"})
+    data = data[~data.duplicated()]
     label = data.label
     data = data.drop(columns=["label"])
     data = apply_cat_dtypes(data, cat_idx)
