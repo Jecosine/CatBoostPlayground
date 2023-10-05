@@ -1,14 +1,15 @@
 from abc import ABC, abstractmethod
-from typing import Optional
+from typing import Optional, Callable
 
 import numpy as np
+import pandas as pd
 from scipy.stats import entropy, norm
 
 from allib.typing import ArrayLike
 from allib.utils import arg_bottomk, arg_topk, get_dist_metric
 
 
-class ActiveLearningMetric(ABC):
+class ActiveLearningStrategy(ABC):
     """ instance selection metrics for active learning """
 
     def __init__(
@@ -120,7 +121,7 @@ class ActiveLearningMetric(ABC):
 # 1. kmeans++
 # 2. k-PP
 # 3.
-class RandomMetric(ActiveLearningMetric):
+class RandomStrategy(ActiveLearningStrategy):
     """ New instances added by random batch selection """
 
     def sample_initial(
@@ -156,9 +157,9 @@ class RandomMetric(ActiveLearningMetric):
         )
 
 
-class UncertainMetric(ActiveLearningMetric):
+class UncertainStrategy(ActiveLearningStrategy):
     def __init__(
-        self, name: str="uncertainty", *args, **kwargs,
+        self, name: str = "uncertainty", *args, **kwargs,
     ):
         super().__init__(*args, **kwargs)
         self.name = name
@@ -231,23 +232,43 @@ class UncertainMetric(ActiveLearningMetric):
             )
 
 
-class DisagreementMetric(ActiveLearningMetric):
-    def __init__(self, models: list, name: str = "vote", *args, **kwargs):
+class DisagreementStrategy(ActiveLearningStrategy):
+    def __init__(
+        self,
+        make_model: Callable,
+        n_committees: int = 5,
+        name: str = "vote",
+        info: dict = None,
+        *args,
+        **kwargs,
+    ):
         super().__init__(*args, **kwargs)
         self.name = name
-        self.models = models
+        if make_model is None:
+            raise RuntimeError("Disagreement strategy need model maker to init models")
+        if n_committees < 2:
+            raise RuntimeError("Disagreement strategy need more than 1 committees")
+        self.info = info or {}
+        extra_params = (
+            {"cat_features": self.info["cat_idx"]} if self.info.get("cat_idx") else {}
+        )
+        # extra_params = {}
+        self.models = [make_model(extra_params) for _ in range(n_committees - 1)]
+        self.n_committees = n_committees
         self.func_strategy = {
             "vote": self.__func_vote,
             "consensus": self.__func_consensus,
             "max_disagreement": self.__func_max_disagreement,
         }[self.name]
+        self.l_x = pd.DataFrame()
+        self.l_y = pd.DataFrame()
 
     def __func_vote(self, pred: ArrayLike):
         res = pred.argmax(axis=-1).T
         n_votes = res.shape[-1]
-        votes = np.zeros(res.shape)
+        votes = np.zeros((res.shape[0], pred.shape[-1]))
         for i in range(votes.shape[0]):
-            unique, count = np.unique(res, return_counts=True)
+            unique, count = np.unique(res[i], return_counts=True)
             votes[i, unique] = count / n_votes
         v_e = entropy(votes.T).squeeze()
         return arg_topk(v_e, self.batch_size)
@@ -261,11 +282,11 @@ class DisagreementMetric(ActiveLearningMetric):
         # get consensus
         res = pred.mean(axis=0)
         c_e = entropy(res.T).squeeze()
-        n_samples, n_votes = res.shape
+        n_samples, n_votes = res.shape[0], pred.shape[0]
         kl = np.zeros((n_samples, n_votes))
         for i in range(n_samples):
             for j in range(n_votes):
-                kl[i, j] = entropy(pred[j, i], qk=c_e[i])
+                kl[i, j] = entropy(pred[j, i], qk=res[i])
         kl = kl.max(axis=1)
         return arg_topk(kl, self.batch_size)
 
@@ -278,17 +299,26 @@ class DisagreementMetric(ActiveLearningMetric):
         *args,
         **kwargs,
     ):
-        models = kwargs.get("models", None)
-        if models is None:
-            raise RuntimeError(f"Disagreement metric requires a `models` parameter")
+        model = kwargs.get("model", None)
+        if model is None:
+            raise RuntimeError(f"Disagreement metric requires a `model` parameter")
         if initial_batch:
-            return self.sample_initial(train_x, train_y, random_state)
-        if len(train_x) > self.batch_size:
-            pred = np.array(
-                [model.predict_proba(train_x).max(axis=1) for model in models]
+            u_x, u_y, self.l_x, self.l_y = self.sample_initial(
+                train_x, train_y, random_state
             )
+            return u_x, u_y, self.l_x.copy(), self.l_y.copy()
+
+        for m in self.models:
+            m.fit(self.l_x, np.ravel(self.l_y))
+        models = [model, *self.models]
+        if len(train_x) > self.batch_size:
+            pred = np.array([m.predict_proba(train_x) for m in models])
             idx = self.func_strategy(pred)
             self.current_idx = train_x.index[idx].copy()
+            l_x = train_x.loc[train_x.index[idx]]
+            l_y = train_y.loc[train_x.index[idx]]
+            self.l_x = pd.concat((self.l_x, l_x))
+            self.l_y = pd.concat((self.l_y, l_y))
             return (
                 train_x.drop(train_x.index[idx]),
                 train_y.drop(train_y.index[idx]),
@@ -305,7 +335,7 @@ class DisagreementMetric(ActiveLearningMetric):
             )
 
 
-class RankedBatchModeMetric(ActiveLearningMetric):
+class RankedBatchModeStrategy(ActiveLearningStrategy):
     def __init__(self, dist_metric: str = "cosine", *args, **kwargs):
         super().__init__(*args, **kwargs)
         # todo: distance functions
@@ -330,7 +360,7 @@ class RankedBatchModeMetric(ActiveLearningMetric):
         **kwargs,
     ) -> (ArrayLike, ArrayLike, ArrayLike, ArrayLike):
         model = kwargs.get("model", None)
-        alpha: float = kwargs.get("alpha", None)
+        alpha: float = kwargs.get("alpha", 0.4)
         L: ArrayLike = kwargs.get("L", None)
         if model is None:
             raise RuntimeError(f"Ranked Batch Mode metric requires a `model` parameter")
@@ -362,7 +392,7 @@ class RankedBatchModeMetric(ActiveLearningMetric):
             )
 
 
-class InformationDensityMetric(ActiveLearningMetric):
+class InformationDensityStrategy(ActiveLearningStrategy):
     def __init__(self, similarity_metric: str = "cosine", *args, **kwargs):
         super().__init__(*args, **kwargs)
         self.sim = get_dist_metric(name=similarity_metric)
@@ -385,7 +415,7 @@ class InformationDensityMetric(ActiveLearningMetric):
         if initial_batch:
             return self.sample_initial(train_x, train_y, random_state)
         if len(train_x) > self.batch_size:
-            info = self.sim(train_x, train_x).sum(axis=1).mean(axis=1)
+            info = self.sim(train_x, train_x).mean(axis=1)
             # todo
             idx = arg_topk(info, self.batch_size)
             self.current_idx = train_x.index[idx].copy()
@@ -405,7 +435,7 @@ class InformationDensityMetric(ActiveLearningMetric):
             )
 
 
-class AcquisitionMetric(ActiveLearningMetric):
+class AcquisitionStrategy(ActiveLearningStrategy):
     def __init__(self, acq_name: str = "PI", *args, **kwargs):
         super().__init__(*args, **kwargs)
         self.acquisition_func = {
@@ -445,19 +475,78 @@ class AcquisitionMetric(ActiveLearningMetric):
         pass
 
 
-__ALL_METRICS = {
-    "random": RandomMetric,
-    "uncertain": UncertainMetric,
-    "disagreement": DisagreementMetric,
-    "ranked_batch": RankedBatchModeMetric,
-    "information_density": InformationDensityMetric,
+class GSxStrategy(ActiveLearningStrategy):
+    def __init__(self, similarity_metric: str = "cosine", *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        self.sim = get_dist_metric(name=similarity_metric)
+
+    def __get_batch(self, X: pd.DataFrame, k: int):
+        data = X.to_numpy()
+        # centroid
+        c = data.mean(axis=0)
+        # center
+        c_idx = self.sim([c], data).argmin()
+        # k-1 batch
+        d = self.sim(data, data)
+        d += np.diag(np.inf * np.ones(d.shape[0]))
+        batch = [c_idx]
+        for i in range(k - 1):
+            idx = d.min(axis=1).argmax()
+            batch.append(idx)
+            d[:, idx] = np.inf
+            d[idx, :] = -1
+        return batch
+
+    def sample(
+        self,
+        train_x: ArrayLike,
+        train_y: ArrayLike,
+        random_state: Optional[int] = None,
+        initial_batch: bool = False,
+        *args,
+        **kwargs,
+    ) -> (ArrayLike, ArrayLike, ArrayLike, ArrayLike):
+        u_size: int = kwargs.get("u_size", None)
+        if u_size is None:
+            raise RuntimeError(f"GSx metric requires a `u_size` parameter")
+        if initial_batch:
+            return self.sample_initial(train_x, train_y, random_state)
+        if len(train_x) > self.batch_size:
+            idx = self.__get_batch(train_x, self.batch_size)
+            self.current_idx = train_x.index[idx].copy()
+            return (
+                train_x.drop(train_x.index[idx]),
+                train_y.drop(train_y.index[idx]),
+                train_x.loc[train_x.index[idx]],
+                train_y.loc[train_y.index[idx]],
+            )
+        else:
+            self.current_idx = train_x.index.copy()
+            return (
+                train_x.drop(train_x.index),
+                train_y.drop(train_y.index),
+                train_x.copy(),
+                train_y.copy(),
+            )
+
+
+ALL_STRATEGIES = {
+    "random": RandomStrategy,
+    "uncertain": UncertainStrategy,
+    "disagreement": DisagreementStrategy,
+    "ranked_batch": RankedBatchModeStrategy,
+    "information_density": InformationDensityStrategy,
+    "gsx": GSxStrategy
 }
 
 
-def get_al_metric(name: str, params: dict):
-    if name in __ALL_METRICS:
-        return __ALL_METRICS[name](**params)
+def get_al_strategy(name: str, params: dict = None):
+    if name in ALL_STRATEGIES:
+        if params is None:
+            return ALL_STRATEGIES[name]
+        else:
+            return ALL_STRATEGIES[name](**params)
     else:
         raise RuntimeError(
-            f"Metric {name} not exists. For custom metric, please override the `ActiveLearningMetric` class"
+            f"Strategy {name} not exists. For custom strategy, please override the `ActiveLearningMetric` class"
         )
