@@ -476,26 +476,64 @@ class AcquisitionStrategy(ActiveLearningStrategy):
 
 
 class GSxStrategy(ActiveLearningStrategy):
-    def __init__(self, similarity_metric: str = "cosine", *args, **kwargs):
+    def __init__(self, distance_metric: str = "cosine", *args, **kwargs):
         super().__init__(*args, **kwargs)
-        self.sim = get_dist_metric(name=similarity_metric)
+        # todo: add params to get_dist_metric
+        self.__dist = get_dist_metric(name=distance_metric)
 
-    def __get_batch(self, X: pd.DataFrame, k: int):
-        data = X.to_numpy()
-        # centroid
-        c = data.mean(axis=0)
-        # center
-        c_idx = self.sim([c], data).argmin()
-        # k-1 batch
-        d = self.sim(data, data)
-        d += np.diag(np.inf * np.ones(d.shape[0]))
-        batch = [c_idx]
-        for i in range(k - 1):
-            idx = d.min(axis=1).argmax()
-            batch.append(idx)
-            d[:, idx] = np.inf
-            d[idx, :] = -1
+    def dist(self, u_x: pd.DataFrame, l_x: pd.DataFrame):
+        """ get distance matrix
+        Args:
+            u_x: unlabeled data (n1, m)
+            l_x: labeled data   (n2, m)
+
+        Returns:
+            np.ndarray: shape (n1, n1 + n2)
+            pd.Index: indices of unlabeled data
+            pd.Index: indices of labeled data
+        """
+        ux_idx = list(u_x.index)
+        lx_idx = list(l_x.index)
+        # todo: get cache
+        if self.__getattribute__("dist_cache_path") is not None:
+            cache_path = self.__getattribute__("dist_cache_path")
+            # debug
+            # print(f"loading cache {cache_path}...")
+            d = np.load(cache_path)
+            return d[np.array(ux_idx)[:, np.newaxis], np.array(lx_idx + ux_idx)[np.newaxis, :]], ux_idx, lx_idx
+
+        # ux_idx = {i: j for i, j in enumerate(ux_idx)}
+        # lx_idx = {i: j for i, j in enumerate(lx_idx)}
+        _u_x = u_x.to_numpy()
+        _l_x = np.vstack((l_x.to_numpy(), _u_x))
+        return self.__dist(u_x, _l_x), ux_idx, lx_idx
+
+    def __get_batch(self, l_x: pd.DataFrame, u_x: pd.DataFrame, k: int):
+        d, ux_idx, lx_idx = self.dist(u_x, l_x)
+        batch = []
+        r = np.array(list(range(len(ux_idx))))
+        c = list(range(len(lx_idx)))
+        c_max = len(c)
+        for i in range(k):
+            selected = d[r[:, np.newaxis], np.array(c)[np.newaxis, :]].min(axis=1).argmax()
+            batch.append(selected)
+            d[selected, :] = -np.inf
+            c.append(selected + c_max)
         return batch
+        # # centroid
+        # c = data.mean(axis=0)
+        # # center
+        # c_idx = self.sim([c], data).argmin()
+        # # k-1 batch
+        # d = self.sim(data, data)
+        # d += np.diag(np.inf * np.ones(d.shape[0]))
+        # batch = [c_idx]
+        # for i in range(k - 1):
+        #     idx = d.min(axis=1).argmax()
+        #     batch.append(idx)
+        #     d[:, idx] = np.inf
+        #     d[idx, :] = -1
+        # return batch
 
     def sample(
         self,
@@ -506,13 +544,17 @@ class GSxStrategy(ActiveLearningStrategy):
         *args,
         **kwargs,
     ) -> (ArrayLike, ArrayLike, ArrayLike, ArrayLike):
+        # todo: add utils for parameter check
         u_size: int = kwargs.get("u_size", None)
+        l_x: ArrayLike = kwargs.get("l_x", None)
         if u_size is None:
             raise RuntimeError(f"GSx metric requires a `u_size` parameter")
+        if l_x is None:
+            raise RuntimeError(f"GSx metric requires a `l_x` parameter")
         if initial_batch:
             return self.sample_initial(train_x, train_y, random_state)
         if len(train_x) > self.batch_size:
-            idx = self.__get_batch(train_x, self.batch_size)
+            idx = self.__get_batch(l_x, train_x, self.batch_size)
             self.current_idx = train_x.index[idx].copy()
             return (
                 train_x.drop(train_x.index[idx]),

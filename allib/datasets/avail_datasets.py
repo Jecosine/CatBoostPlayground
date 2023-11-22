@@ -75,8 +75,8 @@ def iris(path: Optional[str] = None):
         label=label,
         al_strategy=None,
         shuffle=False,
-        init_size=50,
-        batch_size=20,
+        init_size=10,
+        batch_size=5,
     )
 
 

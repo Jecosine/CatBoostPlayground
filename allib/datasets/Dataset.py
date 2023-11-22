@@ -213,6 +213,7 @@ class Dataset:
                 batch_size=self.batch_size,
                 L=self.l_x,
                 u_size=self.u_size,
+                l_x=self.l_x,
             )
             self._first_batch = False
         else:
@@ -224,6 +225,7 @@ class Dataset:
                 batch_size=self.batch_size,
                 L=self.l_x,
                 u_size=self.u_size,
+                l_x=self.l_x,
             )
         # update snapshot
         self.pipeline_params["current_stat"]["snapshot"].append(
