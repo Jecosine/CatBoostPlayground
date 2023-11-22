@@ -4,6 +4,7 @@ import os.path
 import pickle
 from importlib import resources
 from typing import Optional
+import numpy as np
 
 import pandas as pd
 
@@ -65,7 +66,8 @@ def iris(path: Optional[str] = None):
     # separate label column
     data = data.rename(columns={"class": "label"})
     data = data[~data.duplicated()]
-    label = data.label
+    # data = data.replace([np.inf, -np.inf], np.nan).dropna(axis=0)
+    label = data.label.apply(str.strip)  # remove space
     data = data.drop(columns=["label"])
     # return (data, label), (None, None), []
     return Dataset(
@@ -230,6 +232,8 @@ def balance_scale(path: Optional[str] = None):
     for p in checklist:
         ensure_path(p, is_dir=False)
     columns, cat_idx = _get_feature_info(UCI_DB, "balance-scale")
+    # fix incorrect feature names
+    columns[0], columns[-1] = columns[-1], columns[0]
     d = pd.read_csv(
         checklist[0], skiprows=0, names=columns
     )
@@ -300,7 +304,7 @@ AVAIL_DATASETS = {
     "yeast"                : yeast,
     "letter-recognition"   : letter_recognition,
     "image-segmentation"   : image_segmentation,
-    "balance-scale"        : balance_scale,
+    "balance-scale"        : balance_scale,  # todo
     "glass-identification" : glass_identification,
     "wine"                 : wine
 }

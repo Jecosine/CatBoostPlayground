@@ -4,7 +4,7 @@ import os
 import warnings
 import zipfile
 from typing import Optional, List
-
+import numpy as np
 import pandas as pd
 # from tqdm import tqdm
 import requests
@@ -143,6 +143,11 @@ def get_cat_idx(data: pd.DataFrame) -> List[int]:
     columns = data.columns
     cat_idx = []
     for idx, col in enumerate(columns):
-        if pd.api.types.is_categorical_dtype(data[col]):
+        # if pd.api.types.is_categorical_dtype(data[col]):
+        if isinstance(data[col].dtype, pd.CategoricalDtype):
             cat_idx.append(idx)
     return cat_idx
+
+
+def remove_inf(data: pd.DataFrame):
+    return data.replace([np.inf, -np.inf], np.nan).dropna(axis=1)

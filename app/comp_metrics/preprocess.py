@@ -78,7 +78,7 @@ def process_dataset(name: str, dataset: Dataset, reload: bool=False) -> dict:
 def load_datasets(origin_dataset_dict: dict):
     dataset_dict = {}
     for dataset_name, dataset in origin_dataset_dict.items():
-        dataset_dict = dataset_dict | process_dataset(dataset_name, dataset, True)
+        dataset_dict = dataset_dict | process_dataset(dataset_name, dataset, False)
     print("-----" * 6)
     print("Datasets loaded:")
     for name in dataset_dict:

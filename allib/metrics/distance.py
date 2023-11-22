@@ -1,3 +1,4 @@
+from functools import partial
 from typing import List
 
 import numpy as np
@@ -9,13 +10,14 @@ from allib.typing import ArrayLike
 #  2. def of q
 #  3. rewrite in np.select
 
+
 def __make_ldict_getter(d: List[dict]):
     def wrapper(idx, val):
         return d[idx].get(val)
     return wrapper
 
 
-def __m_overlap(X: ArrayLike, Y: ArrayLike):
+def __m_overlap(X: ArrayLike, Y: ArrayLike, **kwargs):
     """
     Args:
         X: of shape (n_features,)
@@ -27,7 +29,7 @@ def __m_overlap(X: ArrayLike, Y: ArrayLike):
     return np.array(X == Y).mean()
 
 
-def __m_eskin(X: ArrayLike, Y: ArrayLike, nks: ArrayLike):
+def __m_eskin(X: ArrayLike, Y: ArrayLike, nks: ArrayLike, **kwargs):
     """
     Args:
         X: of shape (n_features,)
@@ -44,7 +46,7 @@ def __m_eskin(X: ArrayLike, Y: ArrayLike, nks: ArrayLike):
     return res.mean()
 
 
-def __m_iof(X: ArrayLike, Y: ArrayLike, freq: List[dict]):
+def __m_iof(X: ArrayLike, Y: ArrayLike, freq: List[dict], **kwargs):
     """
     Args:
         X: of shape (n_features,)
@@ -65,7 +67,7 @@ def __m_iof(X: ArrayLike, Y: ArrayLike, freq: List[dict]):
     return res.mean()
 
 
-def __m_of(X: ArrayLike, Y: ArrayLike, freq: List[dict], N: int):
+def __m_of(X: ArrayLike, Y: ArrayLike, freq: List[dict], N: int, **kwargs):
     """
     Args:
         X: of shape (n_features,)
@@ -78,8 +80,9 @@ def __m_of(X: ArrayLike, Y: ArrayLike, freq: List[dict], N: int):
     """
     N: float = 1.0 * N
     freq_getter = __make_ldict_getter(freq)
-    xf = np.vectorize(freq_getter)(X)
-    yf = np.vectorize(freq_getter)(Y)
+    indices = np.arange(X.shape[0])
+    xf = np.vectorize(freq_getter)(indices, X)
+    yf = np.vectorize(freq_getter)(indices, Y)
     freq = 1.0 / (1.0 + np.multiply(np.log(N / xf), np.log(N / yf)))
     eq = np.array(X == Y)
     res = eq.astype(float)
@@ -87,7 +90,7 @@ def __m_of(X: ArrayLike, Y: ArrayLike, freq: List[dict], N: int):
     return res.mean()
 
 
-def __m_lin(X: ArrayLike, Y: ArrayLike, prob: List[dict]):
+def __m_lin(X: ArrayLike, Y: ArrayLike, prob: List[dict], **kwargs):
     """
     Args:
         X: of shape (n_features,)
@@ -99,16 +102,14 @@ def __m_lin(X: ArrayLike, Y: ArrayLike, prob: List[dict]):
         float
     """
     prob_getter = __make_ldict_getter(prob)
-    xp = np.vectorize(prob_getter)(X)
-    yp = np.vectorize(prob_getter)(Y)
+    indices = np.arange(X.shape[0])
+    xp = np.vectorize(prob_getter)(indices, X)
+    yp = np.vectorize(prob_getter)(indices, Y)
     otherwise = 2.0 * np.log(xp + yp)
     eq = np.array(X == Y)
     res = eq.astype(float) * 2.0 * np.log(xp)
     res[~eq] = otherwise[~eq]
     w = 1.0 / ((np.log(xp) + np.log(yp)).sum())
-    # shape check
-    d = X.shape[0]
-    assert w.shape[0] == d
     return res.sum() * w
 
 
@@ -126,7 +127,7 @@ def __make_array_filter(arr: List, episilon: float = 1e-7):
     return wrapper
 
 
-def __m_lin1(X: ArrayLike, Y: ArrayLike, prob: List[dict]):
+def __m_lin1(X: ArrayLike, Y: ArrayLike, prob: List[dict], **kwargs):
     """
     Args:
         X: of shape (n_features,)
@@ -137,12 +138,12 @@ def __m_lin1(X: ArrayLike, Y: ArrayLike, prob: List[dict]):
     Returns:
         float
     """
-    ap = [np.array(p.values()) for p in prob]
+    ap = [np.array(list(p.values())) for p in prob]
     indices = np.arange(X.shape[0])
     prob_getter = __make_ldict_getter(prob)
     array_filter = __make_array_filter(ap)
-    xp = np.vectorize(prob_getter)(X)
-    yp = np.vectorize(prob_getter)(Y)
+    xp = np.vectorize(prob_getter)(indices, X)
+    yp = np.vectorize(prob_getter)(indices, Y)
     clip_array = np.frompyfunc(
         array_filter,
         3, 1)
@@ -154,13 +155,10 @@ def __m_lin1(X: ArrayLike, Y: ArrayLike, prob: List[dict]):
     # otherwise
     res[~eq] += qs[1, ~eq]
     w = 1.0 / (qs[0].sum())
-    # shape check
-    d = X.shape[0]
-    assert w.shape[0] == d
     return res.sum() * w
 
 
-def __m_goodall1(X: ArrayLike, Y: ArrayLike, prob2: List[dict]):
+def __m_goodall1(X: ArrayLike, Y: ArrayLike, prob2: List[dict], **kwargs):
     """
     Args:
         X: of shape (n_features,)
@@ -174,7 +172,7 @@ def __m_goodall1(X: ArrayLike, Y: ArrayLike, prob2: List[dict]):
     prob2_getter = __make_ldict_getter(prob2)
     indices = np.arange(X.shape[0])
     xp = np.vectorize(prob2_getter)(indices, X)
-    ap = [np.array(p.values()) for p in prob2]
+    ap = [np.array(list(p.values())) for p in prob2]
     array_filter = __make_array_filter(ap)
     clip_array = np.frompyfunc(
         array_filter,
@@ -192,7 +190,7 @@ def __m_goodall1(X: ArrayLike, Y: ArrayLike, prob2: List[dict]):
     return res.mean()
 
 
-def __m_goodall2(X: ArrayLike, Y: ArrayLike, prob2: List[dict]):
+def __m_goodall2(X: ArrayLike, Y: ArrayLike, prob2: List[dict], **kwargs):
     """
     Args:
         X: of shape (n_features,)
@@ -206,7 +204,7 @@ def __m_goodall2(X: ArrayLike, Y: ArrayLike, prob2: List[dict]):
     indices = np.arange(X.shape[0])
     prob2_getter = __make_ldict_getter(prob2)
     xp = np.vectorize(prob2_getter)(indices, X)
-    ap = [np.array(p.values()) for p in prob2]
+    ap = [np.array(list(p.values())) for p in prob2]
     array_filter = __make_array_filter(ap)
     clip_array = np.frompyfunc(
         array_filter,
@@ -224,7 +222,7 @@ def __m_goodall2(X: ArrayLike, Y: ArrayLike, prob2: List[dict]):
     return res.mean()
 
 
-def __m_goodall3(X: ArrayLike, Y: ArrayLike, prob2: List[dict]):
+def __m_goodall3(X: ArrayLike, Y: ArrayLike, prob2: List[dict], **kwargs):
     """
     Args:
         X: of shape (n_features,)
@@ -243,7 +241,7 @@ def __m_goodall3(X: ArrayLike, Y: ArrayLike, prob2: List[dict]):
     return res.mean()
 
 
-def __m_goodall4(X: ArrayLike, Y: ArrayLike, prob2: dict):
+def __m_goodall4(X: ArrayLike, Y: ArrayLike, prob2: List[dict], **kwargs):
     """
     Args:
         X: of shape (n_features,)
@@ -262,7 +260,7 @@ def __m_goodall4(X: ArrayLike, Y: ArrayLike, prob2: dict):
     return res.mean()
 
 
-def __m_smirnov(X: ArrayLike, Y: ArrayLike, freq: List[dict], N: int, nks: ArrayLike):
+def __m_smirnov(X: ArrayLike, Y: ArrayLike, freq: List[dict], N: int, nks: ArrayLike, **kwargs):
     """
     Args:
         X: of shape (n_features,)
@@ -276,10 +274,11 @@ def __m_smirnov(X: ArrayLike, Y: ArrayLike, freq: List[dict], N: int, nks: Array
     """
     freq_getter = __make_ldict_getter(freq)
     indices = np.arange(X.shape[0])
+    # fixme: xf = 1
     xf = np.vectorize(freq_getter)(indices, X)
     yf = np.vectorize(freq_getter)(indices, Y)
     calc = lambda arr: ((N - arr) / arr).sum()
-    aq = np.array([calc(np.array(f.values())) for f in freq])
+    aq = np.array([calc(np.array(list(f.values()))) for f in freq])
     xq = (N - xf) / xf
     yq = (N - yf) / yf
     i_aqs = (1.0 / aq).sum()
@@ -292,7 +291,7 @@ def __m_smirnov(X: ArrayLike, Y: ArrayLike, freq: List[dict], N: int, nks: Array
     return res.sum() * w
 
 
-def __m_gambaryan(X: ArrayLike, Y: ArrayLike, prob: List[dict], nks: ArrayLike):
+def __m_gambaryan(X: ArrayLike, Y: ArrayLike, prob: List[dict], nks: ArrayLike, **kwargs):
     """
     Args:
         X: of shape (n_features,)
@@ -309,12 +308,17 @@ def __m_gambaryan(X: ArrayLike, Y: ArrayLike, prob: List[dict], nks: ArrayLike):
     xp = np.vectorize(prob_getter)(indices, X)
 
     eq = np.array(X == Y)
-    res = eq.astype(float) * (-xp * np.log2(xp) + (1 - xp) * (np.log2(1 - xp)))
+    # fixme: xp could be 1 and thus 1-xp = 0. np.select needed
+    # res = eq.astype(float) * (-xp * np.log2(xp) + (1 - xp) * (np.log2(1 - xp)))
+    with np.errstate(divide='ignore', invalid='ignore'):
+        res = (1 - xp) * (np.log2(1 - xp))
+        res[np.isnan(res)] = 0.0
+    res = eq.astype(float) * (-xp * np.log2(xp) + res)
     w = 1.0 / nks.sum()
     return res.sum() * w
 
 
-def __m_burnaby(X: ArrayLike, Y: ArrayLike, prob: List[dict]):
+def __m_burnaby(X: ArrayLike, Y: ArrayLike, prob: List[dict], **kwargs):
     """
     Args:
         X: of shape (n_features,)
@@ -329,7 +333,7 @@ def __m_burnaby(X: ArrayLike, Y: ArrayLike, prob: List[dict]):
     xp = np.vectorize(prob_getter)(indices, X)
     yp = np.vectorize(prob_getter)(indices, Y)
     aps = np.array(
-        [2.0 * np.log(1.0 - np.array(p.values())).sum() for p in prob]
+        [2.0 * np.log(1.0 - np.array(list(p.values()))).sum() for p in prob]
     )
 
     eq = np.array(X == Y)
@@ -339,7 +343,7 @@ def __m_burnaby(X: ArrayLike, Y: ArrayLike, prob: List[dict]):
     return res.mean()
 
 
-def __m_anderberg(X: ArrayLike, Y: ArrayLike, prob: List[dict], nks: ArrayLike):
+def __m_anderberg(X: ArrayLike, Y: ArrayLike, prob: List[dict], nks: ArrayLike, **kwargs):
     """
     Args:
         X: of shape (n_features,)
@@ -360,31 +364,38 @@ def __m_anderberg(X: ArrayLike, Y: ArrayLike, prob: List[dict], nks: ArrayLike):
     eq_xp, neq_xp, neq_yp = xp[eq], xp[~eq], yp[~eq]
     eq_nks, neq_nks = nks[eq], nks[~eq]
     eq_res = (np.power(1.0 / eq_xp, 2) * 2.0 / (eq_nks * (eq_nks + 1.0))).sum()
-    neq_res = (1.0 / (2.0 * neq_xp * neq_yp) * 2.0 / (eq_nks * (eq_nks + 1.0))).sum()
+    neq_res = (1.0 / (2.0 * neq_xp * neq_yp) * 2.0 / (neq_nks * (neq_nks + 1.0))).sum()
 
     return eq_res / (eq_res + neq_res)
 
 
 # https://conservancy.umn.edu/bitstream/handle/11299/215736/07-022.pdf?sequence=1&isAllowed=y
-_AVAIL_CAT_METRICS = [
-    "overlap",
-    "eskin",
-    "iof",
-    "of",
-    "lin",
-    "lin1",
-    "goodall1",
-    "goodall2",
-    "goodall3",
-    "goodall4",
-    "smirnov",
-    "gambaryan",
-    "burnaby",
-    "anderberg"
-]
+_AVAIL_CAT_METRICS = {
+    "overlap": __m_overlap,
+    "eskin" : __m_eskin,
+    "iof" : __m_iof,
+    "of": __m_of,
+    "lin": __m_lin,
+    "lin1": __m_lin1,
+    "goodall1": __m_goodall1,
+    "goodall2": __m_goodall2,
+    "goodall3": __m_goodall3,
+    "goodall4": __m_goodall4,
+    "smirnov": __m_smirnov,
+    "gambaryan": __m_gambaryan,
+    "burnaby": __m_burnaby,
+    "anderberg": __m_anderberg,
+}
 
-_AVAIL_METRICS = [
-    "euclidean",
-    "cosine",
-    *_AVAIL_CAT_METRICS
-]
+AVAIL_DIST_METRICS = {
+    "euclidean" : "euclidean",
+    "cosine": "cosine",
+    **_AVAIL_CAT_METRICS
+}
+
+
+def get_dist_metric(name: str, params: dict = None):
+    if name not in AVAIL_DIST_METRICS:
+        raise RuntimeError(f"Distance metric {name} not supported")
+    params = params or {}
+    return partial(_AVAIL_CAT_METRICS[name], **params) if name in _AVAIL_CAT_METRICS else AVAIL_DIST_METRICS[name]

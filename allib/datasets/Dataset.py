@@ -8,7 +8,8 @@ from .preprocess import build_preprocess_ppl
 from allib.models.al import ActiveLearningStrategy
 from allib.typing import ArrayLike
 from copy import deepcopy
-from .tools import get_cat_idx
+from .tools import get_cat_idx, remove_inf
+
 
 # todo:
 # 1. statistics on a dataset
@@ -154,12 +155,16 @@ class Dataset:
             Optional[Dataset]: preprocessed dataset
         """
         pppl = build_preprocess_ppl(steps, params_list)
+        data, label = pppl(self._data, self._label)
+        # temp_data = remove_inf(temp_data)
         if in_place:
-            self._data = pppl(self._data)
+            self._data = data
+            self._label = label
             self.reset()
         else:
             clone = deepcopy(self)
-            clone._data = pppl(self._data)
+            clone._data = data
+            clone._label = label
             clone.reset()
             return clone
 
