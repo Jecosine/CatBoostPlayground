@@ -27,11 +27,15 @@ class PLMetric(BasePlot):
         pre_plot: Callable = None,
         post_plot: Callable = None,
         plot_name: str = "plot.png",
+        cmap: plt.colormaps = colormaps.get_cmap("gist_rainbow"),
+        dpi: int = 300,
         *args,
         **kwargs,
     ):
         """
         Args:
+            dpi:
+            cmap:
             plot_name:
             metric_name:
             instances:
@@ -47,12 +51,13 @@ class PLMetric(BasePlot):
         """
         title = f"{metric_name} on different strategies"
         n_times = len(metrics_n_times)
-        fig, ax = plt.subplots(figsize=(10, 10))
+        fig, ax = plt.subplots(figsize=(10, 10), dpi=dpi)
         ax.set_title(title)
 
         if pre_plot:
-            pre_plot(metric_name, instances, metrics_n_times, strategies)
-        cm = plt.get_cmap("gist_rainbow")
+            pre_plot(metric_name, instances, metrics_n_times, strategies, ax, fig)
+        # cm = plt.get_cmap("gist_rainbow")
+        cm = cmap
         num_colors = metrics_n_times.shape[0]
         ax.set_prop_cycle("color", [cm(1.0 * i / num_colors) for i in range(num_colors)])
         for idx, metrics in enumerate(metrics_n_times):
@@ -68,6 +73,6 @@ class PLMetric(BasePlot):
         ax.set_ylabel(f"{metric_name}")
         ax.legend()
         if post_plot:
-            post_plot(metric_name, instances, metrics_n_times, strategies)
+            post_plot(metric_name, instances, metrics_n_times, strategies, ax, fig)
         fig.savefig(os.path.join(self.output_path, plot_name))
         plt.close(fig)

@@ -4,7 +4,7 @@ from typing import Optional, Callable
 import numpy as np
 import pandas as pd
 from scipy.stats import entropy, norm
-
+from sklearn.cluster import KMeans
 from allib.typing import ArrayLike
 from allib.utils import arg_bottomk, arg_topk, get_dist_metric
 
@@ -480,6 +480,7 @@ class GSxStrategy(ActiveLearningStrategy):
         super().__init__(*args, **kwargs)
         # todo: add params to get_dist_metric
         self.__dist = get_dist_metric(name=distance_metric)
+        self.__cache_d = None
 
     def dist(self, u_x: pd.DataFrame, l_x: pd.DataFrame):
         """ get distance matrix
@@ -499,8 +500,10 @@ class GSxStrategy(ActiveLearningStrategy):
             cache_path = self.__getattribute__("dist_cache_path")
             # debug
             # print(f"loading cache {cache_path}...")
-            d = np.load(cache_path)
-            return d[np.array(ux_idx)[:, np.newaxis], np.array(lx_idx + ux_idx)[np.newaxis, :]], ux_idx, lx_idx
+            if self.__cache_d is None:
+                self.__cache_d = np.load(cache_path)
+
+            return self.__cache_d[np.array(ux_idx)[:, np.newaxis], np.array(lx_idx + ux_idx)[np.newaxis, :]], ux_idx, lx_idx
 
         # ux_idx = {i: j for i, j in enumerate(ux_idx)}
         # lx_idx = {i: j for i, j in enumerate(lx_idx)}
@@ -570,6 +573,61 @@ class GSxStrategy(ActiveLearningStrategy):
                 train_x.copy(),
                 train_y.copy(),
             )
+
+
+class TypiClust(ActiveLearningStrategy):
+    def __init__(self, k: int = 5, distance_metric: str = "cosine", *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        self.k = k
+        self.__dist = get_dist_metric(name=distance_metric)
+        self.__cache_d = None
+
+    def dist(self, u_x: pd.DataFrame):
+        """ get distance matrix
+        Args:
+            u_x: unlabeled data (n1, m)
+            l_x: labeled data   (n2, m)
+
+        Returns:
+            np.ndarray: shape (n1, n1 + n2)
+            pd.Index: indices of unlabeled data
+            pd.Index: indices of labeled data
+        """
+        ux_idx = list(u_x.index)
+        # todo: get cache
+        if self.__getattribute__("dist_cache_path") is not None:
+            cache_path = self.__getattribute__("dist_cache_path")
+            # debug
+            # print(f"loading cache {cache_path}...")
+            if self.__cache_d is None:
+                self.__cache_d = np.load(cache_path)
+
+            return self.__cache_d[np.array(ux_idx)[:, np.newaxis], np.array(ux_idx)[:, np.newaxis]], ux_idx
+
+        # ux_idx = {i: j for i, j in enumerate(ux_idx)}
+        # lx_idx = {i: j for i, j in enumerate(lx_idx)}
+        _u_x = u_x.to_numpy()
+        return self.__dist(u_x, u_x), ux_idx
+
+    def __cluster(self, u_x: pd.DataFrame):
+        d, ux_idx = self.dist(u_x)
+        if len(ux_idx) < self.batch_size:
+            # todo
+            return list(range(len(ux_idx)))
+
+
+    def __get_batch(self, u_x: pd.DataFrame, k: int):
+        d, ux_idx = self.dist(u_x)
+        batch = []
+        r = np.array(list(range(len(ux_idx))))
+        c = list(range(len(ux_idx)))
+        c_max = len(c)
+        for i in range(k):
+            selected = d[r[:, np.newaxis], np.array(c)[np.newaxis, :]].min(axis=1).argmax()
+            batch.append(selected)
+            d[selected, :] = -np.inf
+            c.append(selected + c_max)
+        return batch
 
 
 ALL_STRATEGIES = {
