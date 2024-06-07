@@ -390,6 +390,7 @@ _AVAIL_CAT_METRICS = {
 AVAIL_DIST_METRICS = {
     "euclidean" : "euclidean",
     "cosine": "cosine",
+    "hamming": "hamming",
     **_AVAIL_CAT_METRICS
 }
 
