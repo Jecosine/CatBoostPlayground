@@ -54,7 +54,8 @@ class ActiveLearningPipeline:
         self.batch_size_updater = batch_size_updater
         self._model = model
         if len(eval_metrics) == 0:
-            raise RuntimeError("Require at least one valid evaluating metrics")
+            print("[WARNING] Start without evaluating metrics")
+            # raise RuntimeError("Require at least one valid evaluating metrics")
         self.dataset = dataset
         self.__eval_metrics = eval_metrics
         # if not specify the test set then use test set from `self.dataset`
@@ -81,7 +82,10 @@ class ActiveLearningPipeline:
             "seed": -1,
             "instances": [],
             "snapshot": [],
-            "model_snapshots": []
+            "model_snapshots": [],
+            "predictions": [],
+            "prob": [],
+            "fi":[]
         }
 
     @property
@@ -91,6 +95,12 @@ class ActiveLearningPipeline:
     def apply_eval_metrics(self):
         # update instance amount
         self.current_stat["instances"].append(self.dataset.l_size)
+        self.current_stat["predictions"].append(
+            self.model.predict(self.dataset.test_x)
+        )
+        self.current_stat["prob"].append(
+            self.model.predict_proba(self.dataset.test_x)
+        )
         for mc in self.__eval_metrics:
             # pred = self.model.predict(self.__eval_set[0])
             self.current_stat[mc.__name__].append(

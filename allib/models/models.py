@@ -1,5 +1,5 @@
 from typing import Optional, Type
-from catboost import CatBoostClassifier
+from catboost import CatBoostClassifier, CatboostError
 from sklearn import svm
 from sklearn.base import clone as sk_clone
 from sklearn.linear_model import LogisticRegression
@@ -11,12 +11,13 @@ from .al import ActiveLearningPipeline
 
 class CatboostPL(ActiveLearningPipeline):
     _default_model_params = {
-        "iterations": 5,
-        "learning_rate": 0.1,
+        "iterations": 100,
+        # "learning_rate": 0.1,
     }
 
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
+        self.model_extra_params = kwargs.get("model_extra_params") or {}
         self.extra_params = {"cat_features": kwargs.get("cat_idx")}
         self.model_maker = self.model_maker or self._model_maker
 
@@ -25,28 +26,27 @@ class CatboostPL(ActiveLearningPipeline):
             extra_params = {} | self.extra_params
         # prog = tqdm(self.dataset, total=len(self.dataset))
         # prog.set_description(f"The {n_iter+1}th run:")
-        self.model = self.model_maker(extra_params)
+        self.model = self.model_maker(extra_params | self.model_extra_params)
         counter = 0
         for tx, ty in self.dataset:
             if counter >= self.early_stop:
                 break
             self.model.fit(tx, ty, verbose=False, **extra_params)
-            self.current_stat["model_snapshots"].append(self.model.copy())
+            self.current_stat["fi"].append(self.model.get_feature_importance())
+            # fix: disable snapshot
+            # self.current_stat["model_snapshots"].append(self.model.copy())
             self.apply_eval_metrics()
             counter += 1
 
-    @staticmethod
-    def _model_maker(params: dict = None):
+    def _model_maker(self, params: dict = None):
         if params is None:
-            params = {
-                "iterations": 5,
-                "learning_rate": 0.1
-            }
+            params = self._default_model_params
+            # params = {
+            #     "iterations": 5,
+            #     "learning_rate": 0.1
+            # }
         else:
-            params = ({
-                "iterations": 5,
-                "learning_rate": 0.1
-            } | params)
+            params = (self._default_model_params | params)
         return CatBoostClassifier(verbose=False, **params)
 
 
@@ -66,6 +66,7 @@ class SVCPL(ActiveLearningPipeline):
                 break
             self.model.fit(tx, ty, **extra_params)
             self.current_stat["model_snapshots"].append(deepcopy(self.model))
+            
             self.apply_eval_metrics()
             counter += 1
 
