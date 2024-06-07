@@ -75,7 +75,7 @@ def iris(path: Optional[str] = None):
         label=label,
         al_strategy=None,
         shuffle=False,
-        init_size=10,
+        init_size=5,
         batch_size=5,
     )
 
@@ -116,13 +116,50 @@ def adult(path: Optional[str] = None):
         label=label,
         al_strategy=None,
         shuffle=False,
-        init_size=60,
-        batch_size=50,
+        init_size=10,
+        batch_size=20,
     )
     dataset.info["cat_idx"] = cat_idx
     dataset.test_x, dataset.test_y = test_x, test_y
     return dataset
 
+def heart_disease(path: Optional[str] = None):
+    if not UCI_DB:
+        _load_raw_uci()
+    path = path or os.path.join(CACHE_DIR, "heart-disease")
+    checklist = [os.path.join(path, i) for i in ["processed.cleveland.data", "heart-disease.names"]]
+    for p in checklist:
+        ensure_path(p, is_dir=False)
+    attrs = UCI_DB["heart-disease"]["attributes"]
+    columns = []
+    cat_idx = []
+    for i, attr in enumerate(attrs):
+        columns.append(attr["name"].strip().lower().replace("-", "_"))
+        if attr["type"] in ["Categorical", "Binary"] and attr["role"] != "Target":
+            cat_idx.append(i)
+    d1 = pd.read_csv(checklist[0], skiprows=0, names=columns, skipinitialspace=True)
+    # remove invalid row
+    d1 = d1[d1.apply(lambda row: all(row != "?"), axis=1)]
+    # separate label column
+    data = d1.rename(columns={"num": "label"})
+    data = data[~data.duplicated()]
+    label = data.label
+    data = data.drop(columns=["label"])
+    # apply cat columns
+    data = apply_cat_dtypes(data, cat_idx)
+    
+    # todo: batch size setting
+    dataset = Dataset(
+        data=data,
+        label=label,
+        al_strategy=None,
+        shuffle=False,
+        init_size=10,
+        batch_size=1,
+    )
+    dataset.info["cat_idx"] = cat_idx
+
+    return dataset
 
 def yeast(path: Optional[str] = None):
     if not UCI_DB:
@@ -148,8 +185,8 @@ def yeast(path: Optional[str] = None):
         label=label,
         al_strategy=None,
         shuffle=False,
-        init_size=50,
-        batch_size=20,
+        init_size=5,
+        batch_size=10,
     )
     dataset.info["cat_idx"] = cat_idx
     return dataset
@@ -177,7 +214,7 @@ def letter_recognition(path: Optional[str] = None):
     data = data.drop(columns=["label"])
     data = apply_cat_dtypes(data, cat_idx)
     dataset = Dataset(
-        data=data, label=label, al_strategy=None, shuffle=False, init_size=60, batch_size=50,
+        data=data, label=label, al_strategy=None, shuffle=False, init_size=5, batch_size=20,
     )
     dataset.info["cat_idx"] = cat_idx
     return dataset
@@ -215,7 +252,7 @@ def image_segmentation(path: Optional[str] = None):
     test_x = apply_cat_dtypes(test_x, cat_idx)
 
     dataset = Dataset(
-        data=data, label=label, al_strategy=None, shuffle=False, init_size=50, batch_size=20,
+        data=data, label=label, al_strategy=None, shuffle=False, init_size=5, batch_size=10,
     )
     dataset.info["cat_idx"] = cat_idx
     dataset.test_x, dataset.test_y = test_x, test_y
@@ -243,7 +280,7 @@ def balance_scale(path: Optional[str] = None):
     data = data.drop(columns=["label"])
     data = apply_cat_dtypes(data, cat_idx)
 
-    dataset = Dataset(data=data, label=label, al_strategy=None, shuffle=False, init_size=50, batch_size=20)
+    dataset = Dataset(data=data, label=label, al_strategy=None, shuffle=False, init_size=5, batch_size=20)
     dataset.info["cat_idx"] = cat_idx
     return dataset
 
@@ -268,7 +305,7 @@ def glass_identification(path: Optional[str] = None):
     data = apply_cat_dtypes(data, cat_idx)
 
     dataset = Dataset(
-        data=data, label=label, al_strategy=None, shuffle=False, init_size=30, batch_size=10
+        data=data, label=label, al_strategy=None, shuffle=False, init_size=5, batch_size=10
     )
     dataset.info["cat_idx"] = cat_idx
     return dataset
@@ -293,7 +330,7 @@ def wine(path: Optional[str] = None):
     data = data.drop(columns=["label"])
     data = apply_cat_dtypes(data, cat_idx)
 
-    dataset = Dataset(data=data, label=label, al_strategy=None, shuffle=False, init_size=20, batch_size=5)
+    dataset = Dataset(data=data, label=label, al_strategy=None, shuffle=False, init_size=5, batch_size=5)
     dataset.info["cat_idx"] = cat_idx
     return dataset
 
@@ -306,7 +343,8 @@ AVAIL_DATASETS = {
     "image-segmentation"   : image_segmentation,
     "balance-scale"        : balance_scale,  # todo
     "glass-identification" : glass_identification,
-    "wine"                 : wine
+    "wine"                 : wine,
+    "heart-disease"        : heart_disease,
 }
 
 

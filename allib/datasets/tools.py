@@ -63,7 +63,7 @@ def _download_file(url: str, path: str, desc: str | None = None):
         desc: file description
     """
     with open(path, "wb") as f:
-        with requests.get(url, stream=True) as req:
+        with requests.get(url, stream=True, headers={"User-Agent": "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/117.0.0.0 Safari/537.36 Edg/117.0.2045.55"}) as req:
             req.raise_for_status()
             total = int(req.headers.get("content-length", 0))
             # print(total)

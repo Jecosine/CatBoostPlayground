@@ -49,9 +49,11 @@ class Dataset:
         self.u_y: pd.DataFrame = pd.DataFrame()
         self.l_x: pd.DataFrame = pd.DataFrame()
         self.l_y: pd.DataFrame = pd.DataFrame()
-        # todo
+        
         self.info = {"cat_idx": []}
-        self.reset()
+        self.info["cat_idx"] = get_cat_idx(self._data)
+        
+        self._split_train_test()
         # if percentage, calculate the actual number of instances
         if init_size < 1:
             init_size = int(len(self.u_x) * init_size)
@@ -107,6 +109,10 @@ class Dataset:
         self.l_y: pd.DataFrame = pd.DataFrame()
         self.info["cat_idx"] = get_cat_idx(self._data)
         self._split_train_test()
+        # update batch size
+        self.__n_batches = (
+            math.ceil((self.u_size - self._init_size) / self.batch_size) + 1
+        )
 
     def update_iteration(self, n_iter: Optional[int] = None):
         # todo assert seeds
@@ -217,6 +223,16 @@ class Dataset:
             )
             self._first_batch = False
         else:
+            # try to get weight information
+            fi = self.pipeline_params["current_stat"].get("fi", None)
+            n_w, c_w = 0.0, 0.0
+            if fi is not None:
+                fi = fi[0]
+                fi /= sum(fi)
+                # weight of numerical
+                for i in self.info["cat_idx"]:
+                    c_w += fi[i]
+                n_w = 1.0 - c_w
             self.u_x, self.u_y, nx, ny = self.al_metric(
                 self.u_x,
                 self.u_y,
@@ -226,6 +242,8 @@ class Dataset:
                 L=self.l_x,
                 u_size=self.u_size,
                 l_x=self.l_x,
+                n_w=n_w,
+                c_w=c_w,
             )
         # update snapshot
         self.pipeline_params["current_stat"]["snapshot"].append(

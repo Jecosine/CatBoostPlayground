@@ -14,7 +14,7 @@ def categorical_only(data: pd.DataFrame, label: pd.DataFrame = None):
     columns = data.columns
     cats = []
     for col in columns:
-        if not isinstance(data[col].dtype, CategoricalDtype):
+        if isinstance(data[col].dtype, CategoricalDtype):
             cats.append(col)
     if len(cats) == 0:
         warnings.warn("[DATASET]: No categorical columns found")
@@ -100,6 +100,12 @@ def remove_constant_columns(data: pd.DataFrame, label: pd.DataFrame):
     return data.loc[:, data.nunique() != 1], label
 
 
+def drop_duplicate_rows(data: pd.DataFrame, label: pd.DataFrame):
+    data = data.drop_duplicates()
+    label = label.loc[data.index]
+    return data, label
+
+
 ALL_PREPROCESSES = {
     "categorical_only": categorical_only,
     "continuous_only": continuous_only,
@@ -108,6 +114,7 @@ ALL_PREPROCESSES = {
     "pca": pca,
     "sample_n": sample_n,
     "remove_constant_columns": remove_constant_columns,
+    "drop_duplicate_rows": drop_duplicate_rows,
 }
 
 
